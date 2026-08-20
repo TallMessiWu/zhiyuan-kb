@@ -1,0 +1,1296 @@
+<meta charset="utf-8">
+<title>知源推理知识库</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#F6F7F6; --surface:#FFFFFF; --surface2:#EEF1EF; --surface3:#E6EAE7;
+  --border:#D9DFDB; --border2:#C7CFCA;
+  --ink:#1B2420; --ink2:#49554E; --ink3:#7A857E;
+  --accent:#146356; --accent-ink:#0E4A40; --accent-weak:#E1EFEB; --accent-line:#9CC8BD;
+  --ok:#1B7A43; --ok-bg:#E3F2E8; --ok-line:#A9D6B8;
+  --warn:#96660A; --warn-bg:#FBF0D9; --warn-line:#E4C983;
+  --bad:#B42318; --bad-bg:#FBE9E7; --bad-line:#EDB0A8;
+  --draft:#54626B; --draft-bg:#E8EDF0; --draft-line:#BCC9D0;
+  --arch:#7C837F; --arch-bg:#ECEEEC; --arch-line:#CDD2CE;
+  --mark:#F5E6B8; --shadow:0 1px 2px rgba(27,36,32,.06),0 2px 8px rgba(27,36,32,.05);
+  --sans:"Schibsted Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",sans-serif;
+  --mono:"IBM Plex Mono","SFMono-Regular",Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#111614; --surface:#171D1A; --surface2:#1E2622; --surface3:#26302B;
+    --border:#2B352F; --border2:#3A463F;
+    --ink:#E4E9E6; --ink2:#A9B4AD; --ink3:#79847D;
+    --accent:#5BC1AB; --accent-ink:#8AD6C6; --accent-weak:#1A2E29; --accent-line:#2E5A50;
+    --ok:#63C285; --ok-bg:#152A1C; --ok-line:#2C5A3B;
+    --warn:#E0B440; --warn-bg:#2C2310; --warn-line:#5C4A1A;
+    --bad:#F0857A; --bad-bg:#331F1B; --bad-line:#66352E;
+    --draft:#9FADB6; --draft-bg:#20282D; --draft-line:#3A4850;
+    --arch:#8B948E; --arch-bg:#20241F; --arch-line:#3C443E;
+    --mark:#4A3F14; --shadow:0 1px 2px rgba(0,0,0,.3),0 2px 8px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#111614; --surface:#171D1A; --surface2:#1E2622; --surface3:#26302B;
+  --border:#2B352F; --border2:#3A463F;
+  --ink:#E4E9E6; --ink2:#A9B4AD; --ink3:#79847D;
+  --accent:#5BC1AB; --accent-ink:#8AD6C6; --accent-weak:#1A2E29; --accent-line:#2E5A50;
+  --ok:#63C285; --ok-bg:#152A1C; --ok-line:#2C5A3B;
+  --warn:#E0B440; --warn-bg:#2C2310; --warn-line:#5C4A1A;
+  --bad:#F0857A; --bad-bg:#331F1B; --bad-line:#66352E;
+  --draft:#9FADB6; --draft-bg:#20282D; --draft-line:#3A4850;
+  --arch:#8B948E; --arch-bg:#20241F; --arch-line:#3C443E;
+  --mark:#4A3F14; --shadow:0 1px 2px rgba(0,0,0,.3),0 2px 8px rgba(0,0,0,.25);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.65;-webkit-font-smoothing:antialiased}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:0 4px;white-space:nowrap}
+mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
+button{font-family:var(--sans);cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:3px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- 布局 ---------- */
+#app{display:flex;min-height:100vh}
+#sidebar{width:198px;flex:0 0 198px;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+#main{flex:1;min-width:0;padding:26px 34px 80px;max-width:1240px}
+.brand{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
+.brand .t{font-weight:700;font-size:16px;letter-spacing:.02em}
+.brand .t em{font-style:normal;color:var(--accent)}
+.brand .s{font-family:var(--mono);font-size:10.5px;color:var(--ink3);margin-top:2px;letter-spacing:.04em}
+nav.menu{padding:10px 8px;display:flex;flex-direction:column;gap:2px}
+nav.menu a{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:5px;color:var(--ink2);font-size:13px;font-weight:500}
+nav.menu a:hover{background:var(--surface2);text-decoration:none;color:var(--ink)}
+nav.menu a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:600}
+nav.menu a .ic{width:15px;text-align:center;font-family:var(--mono);font-size:12px;opacity:.85}
+nav.menu a .bdg{margin-left:auto;background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);font-family:var(--mono);font-size:10.5px;border-radius:9px;padding:0 6px;line-height:16px;font-weight:500}
+.side-note{margin-top:auto;padding:12px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--ink3);line-height:1.6}
+.side-note .u{color:var(--ink2);font-weight:600}
+.pagehead{margin:0 0 6px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pagehead h1{font-size:19px;font-weight:700;margin:0;letter-spacing:.01em}
+.pagehead .sub{color:var(--ink3);font-size:12.5px}
+.section-t{font-size:12px;font-weight:600;letter-spacing:.08em;color:var(--ink3);text-transform:uppercase;margin:26px 0 10px;display:flex;align-items:center;gap:8px}
+.section-t::after{content:"";flex:1;height:1px;background:var(--border)}
+@media (max-width:900px){
+  #app{flex-direction:column}
+  #sidebar{width:100%;flex:none;height:auto;position:static;border-right:none;border-bottom:1px solid var(--border)}
+  nav.menu{flex-direction:row;overflow-x:auto;padding:6px 8px}
+  nav.menu a{white-space:nowrap}
+  .side-note{display:none}
+  #main{padding:18px 16px 70px}
+}
+
+/* ---------- 通用组件 ---------- */
+.pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:10.5px;font-weight:500;letter-spacing:.03em;border-radius:3px;padding:1px 7px;border:1px solid;white-space:nowrap;vertical-align:middle}
+.pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.pill.VERIFIED{color:var(--ok);background:var(--ok-bg);border-color:var(--ok-line)}
+.pill.DRAFT{color:var(--draft);background:var(--draft-bg);border-color:var(--draft-line)}
+.pill.REVIEW_DUE{color:var(--warn);background:var(--warn-bg);border-color:var(--warn-line)}
+.pill.STALE{color:var(--bad);background:var(--bad-bg);border-color:var(--bad-line)}
+.pill.ARCHIVED{color:var(--arch);background:var(--arch-bg);border-color:var(--arch-line)}
+.tier{display:inline-block;font-size:10.5px;color:var(--ink3);border:1px solid var(--border2);border-radius:3px;padding:0 6px;line-height:17px;vertical-align:middle;white-space:nowrap}
+.tier.core{color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-weak)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border2);background:var(--surface);color:var(--ink);border-radius:5px;padding:5px 13px;font-size:12.5px;font-weight:500;transition:background .1s}
+.btn:hover{background:var(--surface2)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{filter:brightness(1.08)}
+:root[data-theme="dark"] .btn.pri{color:#0C1512}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .btn.pri{color:#0C1512}}
+.btn.sm{padding:3px 9px;font-size:11.5px}
+.btn.warn{color:var(--warn);border-color:var(--warn-line);background:var(--warn-bg)}
+.btn.bad{color:var(--bad);border-color:var(--bad-line);background:var(--bad-bg)}
+.btn.ok{color:var(--ok);border-color:var(--ok-line);background:var(--ok-bg)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:16px 18px}
+.meta{color:var(--ink3);font-size:11.5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.meta .mono{font-size:11px}
+.meta .sep::before{content:"·";color:var(--border2)}
+.callout{border:1px solid;border-radius:6px;padding:10px 14px;font-size:12.5px;line-height:1.7;margin:10px 0}
+.callout.warn{background:var(--warn-bg);border-color:var(--warn-line);color:var(--ink)}
+.callout.bad{background:var(--bad-bg);border-color:var(--bad-line)}
+.callout.info{background:var(--accent-weak);border-color:var(--accent-line)}
+.callout .ct{font-weight:700;font-size:11.5px;letter-spacing:.05em;display:block;margin-bottom:2px}
+.callout.warn .ct{color:var(--warn)} .callout.bad .ct{color:var(--bad)} .callout.info .ct{color:var(--accent-ink)}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{text-align:left;font-size:11px;letter-spacing:.05em;color:var(--ink3);font-weight:600;padding:6px 10px;border-bottom:1px solid var(--border2);white-space:nowrap}
+.tbl td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:7px;background:var(--surface)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:88px 1fr;gap:4px 14px;font-size:12.5px}
+.kv dt{color:var(--ink3)} .kv dd{margin:0}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font-size:11.5px;border:1px solid var(--border2);border-radius:12px;padding:1px 10px;color:var(--ink2);background:var(--surface)}
+.chip.on{background:var(--accent-weak);border-color:var(--accent-line);color:var(--accent-ink);font-weight:600}
+.toastbox{position:fixed;right:18px;bottom:18px;display:flex;flex-direction:column;gap:8px;z-index:60;max-width:360px}
+.toast{background:var(--ink);color:var(--bg);border-radius:6px;padding:10px 14px;font-size:12.5px;box-shadow:var(--shadow);line-height:1.55}
+.empty{border:1px dashed var(--border2);border-radius:7px;padding:26px;text-align:center;color:var(--ink3);font-size:13px}
+
+/* ---------- 搜索 ---------- */
+.searchrow{display:flex;gap:8px;margin:14px 0 10px}
+.searchrow input{flex:1;border:1px solid var(--border2);background:var(--surface);color:var(--ink);border-radius:6px;padding:10px 14px;font-size:14px;font-family:var(--sans)}
+.searchrow input::placeholder{color:var(--ink3)}
+.filterbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 4px;font-size:12px;color:var(--ink2)}
+.filterbar select{border:1px solid var(--border2);background:var(--surface);color:var(--ink);border-radius:5px;padding:3px 8px;font-size:12px;font-family:var(--sans)}
+.filterbar label.tog{display:inline-flex;gap:5px;align-items:center;cursor:pointer;color:var(--ink3)}
+.result{padding:13px 2px;border-bottom:1px solid var(--border)}
+.result h3{margin:0 0 3px;font-size:14.5px;font-weight:600;line-height:1.5}
+.result .sum{color:var(--ink2);font-size:12.8px;margin:3px 0 6px;line-height:1.65}
+.why{margin-top:6px}
+.why summary{font-size:11px;color:var(--ink3);cursor:pointer;user-select:none}
+.why summary:hover{color:var(--accent)}
+.why .parts{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.why .p{font-family:var(--mono);font-size:10.5px;border:1px solid var(--border);background:var(--surface2);border-radius:3px;padding:1px 7px;color:var(--ink2)}
+.why .p b{color:var(--ink);font-weight:500}
+.why .p.neg{color:var(--warn);border-color:var(--warn-line);background:var(--warn-bg)}
+.why .p.pos{color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-weak)}
+
+/* ---------- 首页 ---------- */
+.statstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:7px;overflow:hidden;margin:18px 0 4px}
+.statstrip .st{background:var(--surface);padding:10px 14px}
+.statstrip .v{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+.statstrip .l{font-size:11px;color:var(--ink3);margin-top:1px}
+.home-cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media (max-width:1050px){.home-cols{grid-template-columns:1fr}}
+.mini-item{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.8px}
+.mini-item:last-child{border-bottom:none}
+.mini-item .n{color:var(--ink3);font-family:var(--mono);font-size:11px;flex:0 0 34px}
+.gap-item{padding:9px 0;border-bottom:1px solid var(--border)}
+.gap-item:last-child{border-bottom:none}
+.gap-item .q{font-size:12.8px;font-weight:500}
+.gap-item .m{font-size:11px;color:var(--ink3);margin-top:2px}
+
+/* ---------- 问答 ---------- */
+.qa-q{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 14px;font-size:13.5px;font-weight:600;margin:18px 0 10px}
+.qa-a{border-left:3px solid var(--accent-line);padding:2px 0 2px 16px;margin:0 0 6px}
+.qa-a p{margin:6px 0}
+.cite{border:1px solid var(--border);border-radius:6px;background:var(--surface);padding:9px 12px;margin:8px 0;font-size:12.3px}
+.cite .ct-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:3px}
+.cite .frag{color:var(--ink2);border-left:2px solid var(--border2);padding-left:10px;margin:5px 0;font-size:12px;line-height:1.65}
+.preset-qs{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+.preset-qs button{border:1px solid var(--border2);background:var(--surface);color:var(--ink2);border-radius:14px;padding:3px 12px;font-size:12px}
+.preset-qs button:hover{border-color:var(--accent-line);color:var(--accent-ink);background:var(--accent-weak)}
+
+/* ---------- 详情 ---------- */
+.detail-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:26px}
+@media (max-width:1050px){.detail-grid{grid-template-columns:1fr}}
+.doc h2{font-size:15px;margin:22px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.doc p{margin:8px 0;font-size:13.5px;line-height:1.8;max-width:72ch}
+.doc pre{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.7}
+.doc pre code{background:none;border:none;padding:0;white-space:pre}
+.sidebl{margin-bottom:18px}
+.sidebl h4{font-size:11.5px;letter-spacing:.06em;color:var(--ink3);margin:0 0 8px;font-weight:600}
+.sidebl .row{font-size:12px;padding:6px 0;border-bottom:1px solid var(--border);line-height:1.6}
+.sidebl .row:last-child{border-bottom:none}
+.sidebl .row .d{color:var(--ink3);font-size:11px}
+.feedbackbar{position:sticky;bottom:0;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:var(--shadow);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:26px}
+.feedbackbar .q{font-size:12.5px;color:var(--ink2);margin-right:4px}
+
+/* ---------- 沉淀 ---------- */
+.cap-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
+@media (max-width:1000px){.cap-grid{grid-template-columns:1fr}}
+.srcbox{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:12px 15px;font-family:var(--mono);font-size:11.5px;line-height:1.8;color:var(--ink2);overflow-x:auto}
+.srcbox .who{color:var(--accent);font-weight:500}
+.formfield{margin-bottom:14px}
+.formfield label{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+.formfield label .opt{color:var(--ink3);font-weight:400}
+.formfield input[type=text],.formfield textarea{width:100%;border:1px solid var(--border2);background:var(--surface);color:var(--ink);border-radius:5px;padding:7px 10px;font-size:13px;font-family:var(--sans)}
+.formfield textarea{min-height:96px;resize:vertical;line-height:1.7}
+
+/* ---------- 队列 ---------- */
+.rev-item{border:1px solid var(--border);border-radius:7px;background:var(--surface);margin-bottom:14px;overflow:hidden}
+.rev-h{padding:12px 16px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.rev-b{padding:12px 16px}
+.rev-trigger{font-size:11.5px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:3px;padding:1px 8px;font-weight:500;white-space:nowrap}
+.diffline{font-family:var(--mono);font-size:11.5px;line-height:1.75;padding:1px 8px;border-radius:2px;white-space:pre-wrap;word-break:break-all}
+.diffline.add{background:var(--ok-bg);color:var(--ok)}
+.diffline.del{background:var(--bad-bg);color:var(--bad)}
+.rev-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border2)}
+details.draftbox{border:1px solid var(--border);border-radius:6px;background:var(--surface2);margin-top:10px}
+details.draftbox summary{padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink2)}
+details.draftbox .inner{padding:2px 14px 12px;font-size:12.5px;line-height:1.75;border-top:1px solid var(--border)}
+
+/* ---------- 看板 ---------- */
+.dashgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.bigv{font-family:var(--mono);font-size:30px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.1}
+.bigv .u{font-size:14px;color:var(--ink3)}
+.trend{display:flex;align-items:flex-end;gap:7px;height:74px;margin-top:12px}
+.trend .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;height:100%}
+.trend .bar i{display:block;width:100%;background:var(--accent);opacity:.28;border-radius:2px 2px 0 0}
+.trend .bar:last-child i{opacity:1}
+.trend .bar em{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.cov td,.cov th{text-align:center}
+.cov td:first-child{text-align:left}
+.cov .c0{color:var(--ink3)} .cov .c1{font-weight:600}
+.footnote{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.7}
+</style>
+
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand"><div class="t">知<em>源</em></div><div class="s">INFERENCE KB · 内部</div></div>
+    <nav class="menu" id="nav"></nav>
+    <div class="side-note">
+      当前用户 <span class="u">王磊 wanglei</span><br>
+      方向：vLLM Ascend / SGLang<br><br>
+      原型说明：示例数据存于内存，刷新后重置。
+    </div>
+  </aside>
+  <main id="main"></main>
+</div>
+<div class="toastbox" id="toastbox"></div>
+
+<script>
+"use strict";
+/* ================= 示例数据（围绕 vLLM Ascend / SGLang 的真实感场景） ================= */
+const TODAY = "2026-08-20";
+const ME = "王磊";
+const STATUS_ZH = {VERIFIED:"已验证",DRAFT:"尚未验证",REVIEW_DUE:"可能过时",STALE:"已失效",ARCHIVED:"已归档"};
+const TIER_ZH = {core:"核心资产",shared:"共享知识",note:"工作记录"};
+const TYPE_ZH = {model:"模型结构",chain:"执行链路",feature:"推理特性"};
+
+const ASSETS = [
+{
+id:"KA-016", tier:"core", type:"feature", status:"VERIFIED",
+title:"vLLM Ascend 0.9.x 环境矩阵：CANN / torch_npu / 驱动兼容表",
+summary:"整理 vllm-ascend v0.9.0–v0.9.2 与 CANN 8.1.RC1 / 8.2.RC1、torch_npu 2.5.1 及 Atlas 800T A2 / 800I A2 驱动固件的兼容组合，附最小可复现安装命令与常见 import 报错对照。",
+tags:["环境","版本矩阵","CANN","torch_npu","部署","安装"],
+models:["通用"], framework:"vllm-ascend", fwVersion:"v0.9.2", env:"CANN 8.2.RC1 · torch_npu 2.5.1.post1",
+author:"张启元", created:"2026-04-03", updated:"2026-08-11", reuseCount:23,
+statusReason:"近 30 天内 5 名非作者按矩阵完成部署并回报成功。",
+code:[{repo:"vllm-project/vllm-ascend",path:"docs/source/installation.md",note:"上游安装文档基线"},{repo:"internal/infer-env",path:"env-matrix/ascend-0.9.x.yaml",note:"内部环境清单"}],
+issues:[{id:"vllm-ascend#1523",t:"CANN 8.2.RC1 下 import 报 libascend_hal 缺失"}],
+body:[
+{h:"结论（兼容矩阵）",p:"v0.9.2 推荐组合：CANN 8.2.RC1 + torch_npu 2.5.1.post1 + 驱动 24.1.rc3。v0.9.0 只在 CANN 8.1.RC1 验证过，混用 8.2 会在初始化 HCCL 时报 <code>EI0002</code>。Atlas 800I A2 需额外确认固件 ≥ 7.5.0.3。"},
+{h:"最小安装路径",p:"先装 CANN toolkit + kernels，再 pip 装 torch/torch_npu 对应版本，最后源码装 vllm 与 vllm-ascend（版本 tag 必须成对，见环境清单）。不要用 conda 提供的 gcc，ABI 不一致会导致自定义算子编译失败。"},
+{h:"常见报错对照",p:"<code>libascend_hal.so: cannot open</code> → 驱动与 toolkit 版本错位；<code>ACL stream synchronize failed, error code is 507035</code> → kernels 包未安装或 arch 不匹配；import vllm 卡死 → 检查 <code>ASCEND_RT_VISIBLE_DEVICES</code> 与容器 device 挂载。"},
+{h:"验证方法",p:"跑 <code>examples/offline_inference.py</code> + <code>vllm bench serve</code> 各一轮，Qwen3-8B 单卡吞吐应在 1.8k tok/s 以上（BF16，2k 上下文），低于该值先查 CPU 绑核。"}],
+validations:[{by:"孙晓东",date:"2026-08-09",note:"按矩阵在新集群部署 800I A2 × 2 节点，一次通过",result:"通过"},{by:"陈雨薇",date:"2026-06-20",note:"v0.9.1 + 8.1.RC1 组合复验通过",result:"通过"}],
+reuses:[{by:"孙晓东",date:"2026-08-09",task:"新集群交付部署"},{by:"李昊",date:"2026-07-28",task:"CI 环境升级"},{by:"陈雨薇",date:"2026-06-20",task:"复现客户环境"}],
+history:[{ver:"v4",date:"2026-08-11",by:"张启元",note:"补充 8.2.RC1 kernels 包报错对照"},{ver:"v3",date:"2026-06-14",by:"张启元",note:"加入 800I A2 固件要求"},{ver:"v2",date:"2026-05-02",by:"张启元",note:"由 KA-012（CANN 7.0 旧指南）重写替代"}]
+},
+{
+id:"KA-002", tier:"core", type:"model", status:"VERIFIED",
+title:"DeepSeek-V3/R1 MLA 结构在 vLLM Ascend 的实现与限制",
+summary:"解析 MLA（Multi-head Latent Attention）的 kv_lora_rank=512 / q_lora_rank=1536 压缩结构，vLLM Ascend 中 matrix-absorb 实现入口、与 KV Cache 布局的关系，以及当前不支持的组合（如 MLA + 长序列 chunked prefill 的图模式）。",
+tags:["mla","attention","deepseek","kv-cache","模型结构","moe"],
+models:["DeepSeek-V3","DeepSeek-R1"], framework:"vllm-ascend", fwVersion:"v0.9.1", env:"CANN 8.1.RC1",
+author:"陈雨薇", created:"2026-03-18", updated:"2026-07-05", reuseCount:17,
+statusReason:"3 名非作者在适配与调优任务中成功复用并回报。",
+code:[{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/attention/mla_v1.py",note:"MLA attention backend 入口"},{repo:"vllm-project/vllm",path:"vllm/model_executor/models/deepseek_v2.py",note:"模型定义（V2/V3 共用）"}],
+issues:[{id:"vllm-ascend#987",t:"MLA 开启 aclgraph 时 decode 阶段 shape 断言失败"}],
+body:[
+{h:"结构要点",p:"MLA 将 KV 压缩到 <code>kv_lora_rank=512</code> 的 latent 向量再升维，KV Cache 只存 latent + RoPE 分量（576 维/ token），显存占用约为 GQA 等效配置的 1/4。q 侧经 <code>q_lora_rank=1536</code> 低秩分解。"},
+{h:"Ascend 实现入口",p:"backend 选择走 <code>get_attn_backend()</code>，MLA 命中 <code>AscendMLABackend</code>；decode 阶段使用 matrix-absorb 形式，将 W_UK/W_UV 吸收进投影，避免显式还原 KV。prefill 仍走展开形式，二者精度一致但算子路径不同。"},
+{h:"当前限制",p:"① MLA + aclgraph 仅支持固定 batch 桶，动态 shape 会触发断言（见 #987）；② 与 chunked prefill 组合时 latent cache 写入需按 chunk 对齐，<code>max_num_batched_tokens</code> 必须为 block_size 整数倍；③ 暂不支持 MLA 头维度上的 TP 切分，TP 只切 MoE/FFN。"},
+{h:"验证步骤",p:"以 R1-671B W8A8 / TP16 起服务，对比 <code>--additional-config '{\"torchair_graph_config\":{\"enabled\":false}}'</code> 前后 decode 时延；再跑 gsm8k 200 题，与 GPU 参考精度差应 < 0.5pp。"}],
+validations:[{by:"李昊",date:"2026-07-02",note:"R1 W8A8 上按文档完成 MLA 校验，精度对齐",result:"通过"},{by:"王磊",date:"2026-05-11",note:"复用于 V3-0324 适配",result:"通过"}],
+reuses:[{by:"李昊",date:"2026-07-02",task:"R1 精度对齐"},{by:"王磊",date:"2026-05-11",task:"V3-0324 新版本适配"},{by:"孙晓东",date:"2026-04-22",task:"MLA 显存估算"}],
+history:[{ver:"v3",date:"2026-07-05",by:"陈雨薇",note:"补充 aclgraph 限制与 issue 链接"},{ver:"v2",date:"2026-04-10",by:"陈雨薇",note:"增加验证步骤"}]
+},
+{
+id:"KA-003", tier:"core", type:"chain", status:"REVIEW_DUE",
+title:"vLLM v1 引擎请求执行链路：AsyncLLM → EngineCore → Scheduler → Worker → ModelRunner",
+summary:"从 OpenAI API 入口到 token 输出的完整调用链：请求进入 AsyncLLM 后经 ZMQ 提交 EngineCore 进程，Scheduler 组批，Worker 侧 ModelRunner 执行 forward 与 sampling，含 vLLM Ascend 在各环节的 hook 点（NPUWorker / NPUModelRunner）。",
+tags:["执行链路","enginecore","scheduler","worker","forward","sampling","调用链"],
+models:["通用"], framework:"vllm-ascend", fwVersion:"v0.9.0（基于 vLLM 0.8.x 撰写）", env:"—",
+author:"王磊", created:"2026-02-12", updated:"2026-05-30", reuseCount:31,
+statusReason:"上游 vLLM PR #17332 重构 EngineCore 进程模型，涉及本文第 2、3 节；自动转入待复核。",
+code:[{repo:"vllm-project/vllm",path:"vllm/v1/engine/core.py",note:"EngineCore 主循环"},{repo:"vllm-project/vllm",path:"vllm/v1/core/sched/scheduler.py",note:"v1 Scheduler"},{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/worker/model_runner_v1.py",note:"NPUModelRunner"}],
+issues:[{id:"vllm#17332",t:"V1: move EngineCore into per-request ZMQ IO threads"}],
+body:[
+{h:"链路总览",p:"api_server → <code>AsyncLLM.generate()</code> → <code>EngineCoreClient</code>（ZMQ）→ EngineCore 进程 <code>core_busy_loop</code> → <code>Scheduler.schedule()</code> 产出 <code>SchedulerOutput</code> → executor 分发至各 Worker → <code>NPUModelRunner.execute_model()</code> → sampler 出 token → 原路返回 detokenize。"},
+{h:"Scheduler 关键行为",p:"v1 调度是连续组批 + chunked prefill 一体化：单一 token 预算（<code>max_num_batched_tokens</code>）内混排 prefill/decode；抢占按 LRU 逐出整请求的 KV block，不做 swap。"},
+{h:"Ascend hook 点",p:"平台分发在 <code>Platform.get_worker_cls()</code>：NPUWorker 负责显存探测与 HCCL 初始化，NPUModelRunner 处理 aclgraph 捕获、MLA 分支与 sampling 的 NPU 算子替换。排障时优先在这三个入口打断点。"},
+{h:"排障用法",p:"请求卡住：查 EngineCore 进程是否存活、ZMQ 队列积压；吞吐异常：dump SchedulerOutput 看批内 prefill/decode 配比；输出乱码：sampling 参数在 Worker 侧是否被图模式缓存吞掉。"}],
+validations:[{by:"孙晓东",date:"2026-04-15",note:"按链路定位 EngineCore 假死问题",result:"通过"}],
+reuses:[{by:"孙晓东",date:"2026-08-02",task:"排查请求 hang（发现文档与 0.9.2 行为有出入）"},{by:"李昊",date:"2026-07-19",task:"新人培训讲解"},{by:"陈雨薇",date:"2026-06-03",task:"抢占策略调研"}],
+history:[{ver:"v2",date:"2026-05-30",by:"王磊",note:"补充抢占与 chunked prefill 说明"}]
+},
+{
+id:"KA-001", tier:"core", type:"feature", status:"VERIFIED",
+title:"vLLM Ascend KV Cache 显存规划与 gpu_memory_utilization 实际行为",
+summary:"NPU 上可用 HBM 探测逻辑、--gpu-memory-utilization 与 CANN 内存池的叠加关系、KV block 数量计算公式，以及 OOM / 显存碎片的排查顺序。",
+tags:["kv-cache","显存","oom","gpu_memory_utilization","hbm","内存"],
+models:["通用"], framework:"vllm-ascend", fwVersion:"v0.9.1", env:"CANN 8.1+",
+author:"李昊", created:"2026-03-02", updated:"2026-07-22", reuseCount:26,
+statusReason:"高频复用，最近验证 2026-08-05。",
+code:[{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/worker/worker.py",note:"determine_available_memory()"},{repo:"vllm-project/vllm",path:"vllm/v1/core/kv_cache_utils.py",note:"KV block 计算"}],
+issues:[{id:"vllm-ascend#1104",t:"gpu_memory_utilization=0.95 时偶发 alloc 失败"}],
+body:[
+{h:"探测逻辑",p:"启动时 NPUWorker 先跑一次 profile run，用 <code>torch.npu.mem_get_info()</code> 峰值推算非 KV 占用；可用 KV 显存 = 总 HBM × utilization − 权重 − 激活峰值 − CANN 预留（约 1.5–3 GB，随算子库版本浮动）。"},
+{h:"经验值",p:"800T A2（64G）单卡：utilization 0.9 起步；开 aclgraph 需再留 2–4 GB 图缓存，建议 0.85。KV block 数不足 warmup 会直接 <code>ValueError: No available memory for the cache blocks</code>。"},
+{h:"OOM 排查顺序",p:"① 确认权重精度与 TP 切分后单卡权重量；② 看启动日志 <code>Available KV cache memory</code> 行；③ 若运行中 OOM，多为激活峰值被低估——降低 <code>max_num_batched_tokens</code> 比降 utilization 更有效；④ 长稳后碎片化报错，考虑关闭 profile 阶段的 dummy 多模态输入。"}],
+validations:[{by:"张启元",date:"2026-08-05",note:"32B 模型 KV 预算按公式核对无误",result:"通过"}],
+reuses:[{by:"张启元",date:"2026-08-05",task:"容量规划"},{by:"陈雨薇",date:"2026-07-10",task:"客户 OOM 工单"},{by:"孙晓东",date:"2026-05-28",task:"部署调参"}],
+history:[{ver:"v3",date:"2026-07-22",by:"李昊",note:"补 aclgraph 图缓存预留"}]
+},
+{
+id:"KA-009", tier:"core", type:"feature", status:"VERIFIED",
+title:"Ascend Attention Backend 选型矩阵：ASCEND vs ASCEND_MLA vs torch-npu FA",
+summary:"按模型结构（MHA/GQA/MLA）、序列长度与是否开图模式给出 attention backend 选择矩阵，含 VLLM_ATTENTION_BACKEND 覆盖方式与各 backend 已知缺陷。",
+tags:["attention","backend","mla","gqa","flash-attention","图编译"],
+models:["通用","DeepSeek-V3","Qwen3-235B-A22B"], framework:"vllm-ascend", fwVersion:"v0.9.1–v0.9.2", env:"CANN 8.1+",
+author:"孙晓东", created:"2026-04-20", updated:"2026-08-01", reuseCount:14,
+statusReason:"2 名非作者按矩阵完成 backend 切换验证。",
+code:[{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/attention/attention_v1.py",note:"AscendAttentionBackend"},{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/platform.py",note:"backend 分发逻辑"}],
+issues:[],
+body:[
+{h:"选型矩阵",p:"GQA/MHA 常规长度（≤32k）→ <code>ASCEND</code>（走 npu_fused_infer_attention_score）；MLA 模型 → 自动 <code>ASCEND_MLA</code>，不可手动改回；>32k 长序列 prefill 优先确认 FIA 算子的 actual_seq_len 分支是否命中，否则退化明显。"},
+{h:"覆盖方式",p:"环境变量 <code>VLLM_ATTENTION_BACKEND</code> 在 ascend 平台会被 platform 校验拦截，非法组合直接报错而不是静默回退——这是和 GPU 版行为的差异点。"},
+{h:"已知缺陷",p:"① FIA 在 head_dim=80（如部分 VL 模型）时走兜底实现，吞吐降约 18%；② sliding window + 图模式组合未验证；③ alibi 系列模型仅 eager 可用。"}],
+validations:[{by:"王磊",date:"2026-07-30",note:"Qwen2.5-VL head_dim=80 路径实测退化 17.6%，与文档一致",result:"通过"}],
+reuses:[{by:"王磊",date:"2026-07-30",task:"VL 模型吞吐分析"},{by:"李昊",date:"2026-06-15",task:"长序列 backend 确认"}],
+history:[{ver:"v2",date:"2026-08-01",by:"孙晓东",note:"补 head_dim=80 实测数据"}]
+},
+{
+id:"KA-006", tier:"core", type:"feature", status:"VERIFIED",
+title:"Continuous Batching 调度行为与 max_num_batched_tokens 调参",
+summary:"v1 引擎连续组批的 token 预算模型：prefill/decode 混排规则、抢占触发条件、max_num_batched_tokens / max_num_seqs 对 TTFT 与吞吐的相反影响，附三档推荐配置。",
+tags:["continuous-batching","调度","scheduler","调参","ttft","吞吐"],
+models:["通用"], framework:"vllm-ascend", fwVersion:"v0.9.x", env:"—",
+author:"王磊", created:"2026-05-06", updated:"2026-07-18", reuseCount:19,
+statusReason:"多次被部署调参任务复用。",
+code:[{repo:"vllm-project/vllm",path:"vllm/v1/core/sched/scheduler.py",note:"token 预算与混排"}],
+issues:[],
+body:[
+{h:"预算模型",p:"每步调度在 <code>max_num_batched_tokens</code> 预算内先保 decode（每请求 1 token），余量给 prefill chunk。预算大 → prefill 并入多、吞吐高、decode 抖动大；预算小 → TTFT 波动小但长 prompt 首响应变慢。"},
+{h:"三档推荐",p:"对话为主（短 prompt）：4096 / max_num_seqs 256；文档问答（8k+ prompt）：8192–16384；离线批推理：拉满至显存允许（32768），关注激活峰值。开 aclgraph 时预算变化会触发重捕获，先定预算再开图。"},
+{h:"抢占信号",p:"日志出现 <code>Preempted N requests</code> 说明 KV 池不足，优先加卡或降 <code>max_model_len</code>，而不是调小预算掩盖问题。"}],
+validations:[{by:"陈雨薇",date:"2026-07-15",note:"文档问答档位在客户侧压测复验",result:"通过"}],
+reuses:[{by:"陈雨薇",date:"2026-07-15",task:"客户压测调参"},{by:"张启元",date:"2026-06-08",task:"上线前容量评估"}],
+history:[{ver:"v2",date:"2026-07-18",by:"王磊",note:"更新三档推荐值"}]
+},
+{
+id:"KA-004", tier:"shared", type:"feature", status:"VERIFIED",
+title:"SGLang RadixAttention 前缀缓存命中率调优",
+summary:"RadixAttention 的 radix tree 复用机制、命中率观测方法（cached_tokens 指标）、多轮对话与系统提示词场景的组织方式，以及与 chunked prefill、调度策略的交互。",
+tags:["radix-attention","prefix-cache","前缀缓存","sglang","kv-cache"],
+models:["Qwen3-32B","Qwen2.5-72B"], framework:"sglang", fwVersion:"v0.4.6", env:"GPU 参考环境",
+author:"陈雨薇", created:"2026-04-28", updated:"2026-06-25", reuseCount:11,
+statusReason:"被 API 网关团队复用于缓存策略设计。",
+code:[{repo:"sgl-project/sglang",path:"python/sglang/srt/mem_cache/radix_cache.py",note:"radix tree 实现"},{repo:"sgl-project/sglang",path:"python/sglang/srt/managers/schedule_policy.py",note:"缓存感知调度"}],
+issues:[],
+body:[
+{h:"机制",p:"KV 按 token 前缀组织成 radix tree，新请求最长前缀匹配后只 prefill 增量部分；LRU 驱逐叶节点。与 vLLM 固定 block 前缀缓存相比，radix 粒度到 token，多轮对话收益更高。"},
+{h:"观测",p:"响应 meta 里 <code>cached_tokens / prompt_tokens</code> 即命中率；服务端看 <code>/metrics</code> 的 cache hit 序列。系统提示词统一前置、会话内不改动，是命中率的第一影响因素。"},
+{h:"注意",p:"高并发下 tree 锁竞争在 0.4.x 已优化，但 <code>--disable-radix-cache</code> 仍是排查数值异常时的第一个开关：命中路径与全量 prefill 数值可能有 1e-3 级差异，影响贪心解码的可复现性。"}],
+validations:[{by:"李昊",date:"2026-06-22",note:"网关多轮场景命中率从 31% 提到 74%",result:"通过"}],
+reuses:[{by:"李昊",date:"2026-06-22",task:"网关缓存策略"}],
+history:[{ver:"v2",date:"2026-06-25",by:"陈雨薇",note:"补 0.4.6 锁优化说明"}]
+},
+{
+id:"KA-013", tier:"core", type:"chain", status:"VERIFIED",
+title:"SGLang Scheduler overlap 调度与 CPU 开销分析",
+summary:"SGLang event_loop_overlap 将 CPU 调度与 GPU forward 重叠的实现、TpModelWorkerClient 双缓冲结构，以及小 batch 场景 CPU bound 的判定与缓解手段。",
+tags:["sglang","scheduler","overlap","执行链路","cpu","调度"],
+models:["通用"], framework:"sglang", fwVersion:"v0.4.5+", env:"—",
+author:"孙晓东", created:"2026-05-20", updated:"2026-07-08", reuseCount:9,
+statusReason:"用于两次性能分析任务并回报有效。",
+code:[{repo:"sgl-project/sglang",path:"python/sglang/srt/managers/scheduler.py",note:"event_loop_overlap"},{repo:"sgl-project/sglang",path:"python/sglang/srt/managers/tp_worker_overlap_thread.py",note:"双缓冲 worker"}],
+issues:[],
+body:[
+{h:"结构",p:"Scheduler 主循环产出 batch 后立即投递 worker 线程执行，同时着手下一轮组批与采样结果回填，形成一步流水线；关键在 sampling 结果的 future 机制，next token 在 CPU 侧先占位。"},
+{h:"判定 CPU bound",p:"decode 阶段 GPU 利用率 < 70% 且 batch < 32 时，大概率调度/前处理占主导。用 <code>--enable-metrics</code> 看 scheduler 每步耗时，> forward 耗时 60% 即需处理。"},
+{h:"缓解",p:"绑核（NUMA 对齐）、减小 tokenizer 进程与 detokenize 往返、提高 batch 聚合等待窗口。Ascend 适配场景下该结论可参考，但双缓冲在 NPU 流上的行为需另行验证（见知识缺口）。"}],
+validations:[{by:"王磊",date:"2026-07-06",note:"小 batch CPU bound 判定方法有效",result:"通过"}],
+reuses:[{by:"王磊",date:"2026-07-06",task:"decode 利用率分析"}],
+history:[]
+},
+{
+id:"KA-010", tier:"shared", type:"feature", status:"REVIEW_DUE",
+title:"aclgraph / TorchAir 图模式启用条件与限制",
+summary:"vLLM Ascend 图模式两条路线（aclgraph 捕获、TorchAir 整图）的启用配置、支持范围（模型结构 × 并行 × 特性组合）、图缓存目录与失效重编译的触发条件。",
+tags:["图编译","aclgraph","torchair","graph","性能"],
+models:["Qwen3 系列","DeepSeek-V3"], framework:"vllm-ascend", fwVersion:"v0.9.1", env:"CANN 8.0.RC2（撰写时）",
+author:"张启元", created:"2026-04-12", updated:"2026-06-10", reuseCount:13,
+statusReason:"环境基线升级至 CANN 8.2.RC1，图缓存与约束项可能变化；自动转入待复核。",
+code:[{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/compilation/acl_graph.py",note:"aclgraph 捕获"},{repo:"vllm-project/vllm-ascend",path:"docs/source/user_guide/graph_mode.md",note:"图模式文档"}],
+issues:[{id:"vllm-ascend#1391",t:"CANN 8.2 下图缓存目录结构变化导致复用失败"}],
+body:[
+{h:"两条路线",p:"默认 aclgraph 按 batch 桶捕获 decode 图；TorchAir 走 <code>--additional-config '{\"torchair_graph_config\":{\"enabled\":true}}'</code> 整图编译，冷启动慢但稳态更优，主要用于 DeepSeek 系列。"},
+{h:"支持范围（撰写时）",p:"aclgraph：dense 模型 + TP ≤ 8 稳定；MoE + EP 组合部分算子回退 eager。TorchAir：DeepSeek V3/R1 验证充分，Qwen MoE 未全验证。投机推理与图模式组合仅 MTP 路径可用。"},
+{h:"图缓存",p:"缓存目录 <code>~/.torchair_cache</code>（或 <code>TORCHAIR_CACHE_HOME</code>），模型/并行/shape 任一变化即重编译。CI 里建议固定缓存卷，冷启动从 ~25min 降至 ~4min。"}],
+validations:[{by:"李昊",date:"2026-05-19",note:"TorchAir 冷启动缓存方案生效",result:"通过"}],
+reuses:[{by:"李昊",date:"2026-08-06",task:"升级 8.2 后图缓存失效排查（触发过时反馈）"},{by:"陈雨薇",date:"2026-05-19",task:"CI 提速"}],
+history:[{ver:"v2",date:"2026-06-10",by:"张启元",note:"补 MoE 回退说明"}]
+},
+{
+id:"KA-018", tier:"shared", type:"feature", status:"REVIEW_DUE",
+title:"vLLM Ascend Expert Parallelism（EP）在 DeepSeek MoE 上的配置",
+summary:"EP 与 TP 的组合关系（TP 切注意力、EP 切专家）、enable_expert_parallel 配置入口、all-to-all 通信在 HCCL 上的行为，以及专家负载不均的观测手段。",
+tags:["并行策略","ep","moe","deepseek","hccl","expert-parallel"],
+models:["DeepSeek-V3","DeepSeek-R1"], framework:"vllm-ascend", fwVersion:"v0.9.1", env:"CANN 8.1.RC1",
+author:"李昊", created:"2026-05-15", updated:"2026-06-30", reuseCount:7,
+statusReason:"孙晓东 2026-08-14 反馈：0.10 起配置项从 additional-config 迁移至一级参数，本文写法可能过时。",
+code:[{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/ops/fused_moe.py",note:"MoE 分发与 all-to-all"}],
+issues:[{id:"vllm-ascend#1466",t:"EP>1 时个别专家 OOM"}],
+body:[
+{h:"组合关系",p:"推荐 R1-671B：TP8 × EP4（32 卡）或 TP16 × EP2；EP 切分 256 个路由专家，共享专家随 TP。<code>--enable-expert-parallel</code> 开启后 MoE 层走 all-to-all，注意 HCCL buffer 需调大（<code>HCCL_BUFFSIZE=512</code>）。"},
+{h:"负载观测",p:"打开 <code>VLLM_MOE_LOG_LOAD=1</code>（内部补丁）每 100 步输出专家命中直方图；单专家持续 > 2× 均值时考虑开启冗余专家或 EPLB。"}],
+validations:[{by:"孙晓东",date:"2026-06-12",note:"TP8×EP4 组合部署成功",result:"通过"}],
+reuses:[{by:"孙晓东",date:"2026-08-14",task:"0.10 升级验证（发现配置写法已变）"}],
+history:[]
+},
+{
+id:"KA-005", tier:"note", type:"feature", status:"DRAFT",
+title:"Qwen3-235B-A22B W8A8 量化在 Atlas 800T A2 上加载 OOM 排查记录",
+summary:"msModelSlim W8A8 量化权重在 TP16 加载时 OOM：根因是量化 checkpoint 里保留了 FP16 副本字段，加载期峰值翻倍；用流式加载 + 忽略冗余字段解决。",
+tags:["量化","w8a8","oom","qwen3","显存","moe"],
+models:["Qwen3-235B-A22B"], framework:"vllm-ascend", fwVersion:"v0.9.2", env:"CANN 8.2.RC1 · msModelSlim 8.0",
+author:"陈雨薇", created:"2026-08-12", updated:"2026-08-12", reuseCount:0,
+statusReason:"AI 自动从调试会话生成，作者已确认问题/环境/结论三项，尚无非作者复用。",
+code:[{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/quantization/quant_config.py",note:"量化权重加载"}],
+issues:[],
+body:[
+{h:"问题",p:"Qwen3-235B-A22B 经 msModelSlim 做 W8A8 后，vllm-ascend TP16 加载在 62% 进度 OOM（单卡 64G）。推理期显存估算明明足够。"},
+{h:"环境",p:"vllm-ascend v0.9.2 · CANN 8.2.RC1 · msModelSlim 8.0.0 · Atlas 800T A2 ×2 节点。"},
+{h:"结论",p:"量化产物 safetensors 里同时含 <code>weight</code>（int8）与 <code>weight_fp16_backup</code> 字段，权重加载器默认全部读入导致峰值翻倍。在 load 阶段过滤 <code>*_fp16_backup</code> 后正常；已给 msModelSlim 提单要求导出时可选去除。临时脚本见内部仓 tools/strip_backup.py。"}],
+validations:[],
+reuses:[],
+history:[{ver:"v1",date:"2026-08-12",by:"陈雨薇",note:"AI 生成，作者确认三要素"}]
+},
+{
+id:"KA-007", tier:"note", type:"feature", status:"DRAFT",
+title:"SGLang EAGLE-3 投机推理在 Qwen3-32B 上的验证记录",
+summary:"--speculative-algorithm EAGLE3 + 官方 draft 权重实测：接受长度 2.1 tok/step，decode 提速 1.6×；温度 >0.7 收益明显下降；与 radix cache 兼容。",
+tags:["投机推理","speculative","eagle","sglang","draft-model"],
+models:["Qwen3-32B"], framework:"sglang", fwVersion:"v0.4.7", env:"GPU 参考环境",
+author:"王磊", created:"2026-07-25", updated:"2026-07-25", reuseCount:1,
+statusReason:"工作记录；已有 1 次非作者查阅但未回报结果。",
+code:[{repo:"sgl-project/sglang",path:"python/sglang/srt/speculative/eagle_worker.py",note:"EAGLE worker"}],
+issues:[],
+body:[
+{h:"问题",p:"评估 EAGLE-3 在 Qwen3-32B 上的实际收益，作为 Ascend 侧投机推理选型参考。"},
+{h:"环境",p:"sglang v0.4.7 · Qwen3-32B + yuhuili/EAGLE3-Qwen3-32B draft · 单机 8 卡参考环境。"},
+{h:"结论",p:"greedy 下平均接受长度 2.1，端到端 decode 1.6×；temperature=1.0 时降至 1.2×。<code>--speculative-num-steps 3 --speculative-eagle-topk 4</code> 为该模型最优档。显存增加约 6%。注意：draft 与 target 的 tokenizer 必须严格一致，曾因 draft 权重配错导致输出重复。"}],
+validations:[],reuses:[{by:"李昊",date:"2026-08-01",task:"投机推理选型调研（未回报）"}],
+history:[]
+},
+{
+id:"KA-014", tier:"note", type:"feature", status:"DRAFT",
+title:"DeepSeek-R1 MTP 投机推理在 vllm-ascend 0.9.1 踩坑记录",
+summary:"开启 MTP（num_speculative_tokens=1）后吞吐不升反降的三个原因：图模式未同时启用、batch 过大摊薄收益、MTP 权重未量化导致带宽瓶颈。",
+tags:["投机推理","mtp","deepseek","speculative","性能"],
+models:["DeepSeek-R1"], framework:"vllm-ascend", fwVersion:"v0.9.1", env:"CANN 8.1.RC1",
+author:"孙晓东", created:"2026-06-18", updated:"2026-06-18", reuseCount:0,
+statusReason:"工作记录，未被复用。",
+code:[{repo:"vllm-project/vllm-ascend",path:"vllm_ascend/worker/mtp_proposer_v1.py",note:"MTP proposer"}],
+issues:[],
+body:[
+{h:"问题",p:"R1 开 MTP 预期 decode 提速 30%+，实测吞吐下降 8%。"},
+{h:"环境",p:"vllm-ascend v0.9.1 · R1-671B W8A8 · TP16 · <code>speculative_config={\"method\":\"deepseek_mtp\",\"num_speculative_tokens\":1}</code>。"},
+{h:"结论",p:"① MTP 分支默认 eager，需 torchair 图里同时捕获 MTP 头；② batch>64 后验证开销吃掉收益，MTP 适合中低并发低延迟场景；③ MTP 头保持 BF16 会在 W8A8 主干旁成为带宽热点，量化后恢复正收益（+22%）。"}],
+validations:[],reuses:[],history:[]
+},
+{
+id:"KA-011", tier:"note", type:"model", status:"DRAFT",
+title:"Qwen2.5-VL 视觉编码器在 SGLang 的张量并行切分笔记",
+summary:"ViT 部分 TP 切分方式（按 head 切 QKV、MLP 列/行并联）、window attention 的特殊处理，以及视觉部分不切分（复制）与切分的显存/速度权衡。",
+tags:["多模态","vit","张量并行","qwen2.5-vl","模型结构"],
+models:["Qwen2.5-VL-72B"], framework:"sglang", fwVersion:"v0.4.6", env:"—",
+author:"王磊", created:"2026-07-30", updated:"2026-07-30", reuseCount:0,
+statusReason:"工作记录，未被复用。",
+code:[{repo:"sgl-project/sglang",path:"python/sglang/srt/models/qwen2_5_vl.py",note:"VL 模型定义"}],
+issues:[],
+body:[
+{h:"问题",p:"确认 72B VL 在 TP8 下视觉塔的切分行为与显存占用。"},
+{h:"环境",p:"sglang v0.4.6 · Qwen2.5-VL-72B-Instruct · TP8。"},
+{h:"结论",p:"sglang 对 ViT 做 TP 切分（QKV 按 head、MLP 标准列/行），window attention 的 cu_seqlens 在各 rank 复制计算；视觉塔仅 ~7B，切分通信开销在图片多时反而亏——评估过 vision-replicate 补丁，小图场景快 9%，暂不合入。"}],
+validations:[],reuses:[],history:[]
+},
+{
+id:"KA-017", tier:"note", type:"feature", status:"DRAFT",
+title:"sglang bench_serving 与 vllm benchmark_serving 口径差异（TTFT 统计）",
+summary:"两套压测脚本 TTFT 统计位置不同：sglang 从请求发出计时、vllm 从连接建立计时，流式首包定义也不同，跨框架对比需统一口径，差异可达 12%。",
+tags:["benchmark","ttft","压测","口径","性能"],
+models:["通用"], framework:"通用", fwVersion:"sglang v0.4.x / vllm v0.9.x", env:"—",
+author:"李昊", created:"2026-08-06", updated:"2026-08-06", reuseCount:0,
+statusReason:"工作记录，未被复用。",
+code:[{repo:"sgl-project/sglang",path:"python/sglang/bench_serving.py",note:"sglang 压测入口"},{repo:"vllm-project/vllm",path:"benchmarks/benchmark_serving.py",note:"vllm 压测入口"}],
+issues:[],
+body:[
+{h:"问题",p:"同一服务用两套脚本压测 TTFT 相差 12%，需要给对比报告一个统一口径。"},
+{h:"环境",p:"sglang v0.4.7 bench_serving · vllm v0.9.2 benchmark_serving · 同一 Qwen3-32B 服务。"},
+{h:"结论",p:"差异来自计时起点（发出请求 vs 连接就绪）与首包判定（首个 SSE chunk vs 首个非空 token）。对外报告统一采用 vllm 口径并注明；内部回归两者都跑，趋势一致即可。"}],
+validations:[],reuses:[],history:[]
+},
+{
+id:"KA-015", tier:"shared", type:"model", status:"VERIFIED",
+title:"模型 config.json 速查：rope_scaling / GQA / head_dim 对显存与并行的影响",
+summary:"常用配置字段的推理含义：num_key_value_heads 决定 KV 显存与 TP 上限、rope_scaling 各类型（yarn/linear/dynamic）对长文本的影响、head_dim 非 2^n 时的算子退化。",
+tags:["模型结构","config","gqa","rope","head_dim","kv-cache"],
+models:["通用"], framework:"通用", fwVersion:"—", env:"—",
+author:"张启元", created:"2026-03-25", updated:"2026-06-02", reuseCount:15,
+statusReason:"新人任务高频引用，两名非作者验证。",
+code:[],issues:[],
+body:[
+{h:"KV 显存与 TP 上限",p:"KV 显存 ∝ <code>num_key_value_heads × head_dim × 层数</code>；TP 度不能超过 num_key_value_heads（否则 KV head 复制，显存反增）。Qwen3-32B 是 8 个 KV head，TP8 即上限。"},
+{h:"rope_scaling",p:"yarn 需同时看 <code>original_max_position_embeddings</code>；部署时 <code>--max-model-len</code> 超过原生长度而未配 scaling，精度会静默劣化——这是长文本工单的最常见根因。"},
+{h:"head_dim 陷阱",p:"head_dim=80/96 等非 128 值在部分融合算子走兜底路径，性能评估要单独跑，勿直接套 128 的经验值。"}],
+validations:[{by:"王磊",date:"2026-05-20",note:"新模型评估 checklist 采纳",result:"通过"},{by:"李昊",date:"2026-04-18",note:"复核 GQA 计算公式",result:"通过"}],
+reuses:[{by:"王磊",date:"2026-05-20",task:"新模型评估"},{by:"陈雨薇",date:"2026-04-30",task:"长文本工单"}],
+history:[]
+},
+{
+id:"KA-008", tier:"shared", type:"feature", status:"STALE",
+title:"vLLM 0.6.x 多卡 Ray 部署指南（Ascend）",
+summary:"【已失效】基于 vLLM 0.6.x + Ray 的多卡/多机部署方式。v1 引擎默认多进程 executor，Ascend 场景 Ray 路径已不再维护，多机改用 MP + 静态编排。",
+tags:["部署","ray","多机","并行策略"],
+models:["通用"], framework:"vllm-ascend", fwVersion:"v0.6.x（已过期）", env:"CANN 8.0",
+author:"张启元", created:"2025-11-10", updated:"2026-03-15", reuseCount:5,
+statusReason:"2026-03 确认：v1 引擎下 Ray executor 在 Ascend 未适配 HCCL 初始化时序，按本文操作会启动失败。保留供历史排障参考。",
+code:[{repo:"vllm-project/vllm",path:"vllm/executor/ray_distributed_executor.py",note:"（旧）Ray executor"}],
+issues:[{id:"内部#332",t:"Ray 路径 HCCL init 死锁"}],
+body:[
+{h:"失效说明",p:"本文方法适用于 v0 引擎。v1 引擎（0.8+ 默认）多卡走 MP executor，多机由部署平台静态编排 + <code>--data-parallel-*</code> 参数族；Ray 方案在 Ascend 的 HCCL 初始化存在时序死锁，已停止维护。替代方案见 KA-016 环境矩阵与部署章节。"}],
+validations:[{by:"王磊",date:"2026-03-15",note:"确认 v1 下按文档操作失败，标记失效",result:"失效确认"}],
+reuses:[],history:[{ver:"v2",date:"2026-03-15",by:"王磊",note:"标记 STALE，写失效说明"}]
+},
+{
+id:"KA-012", tier:"shared", type:"feature", status:"ARCHIVED",
+title:"老 Wiki：昇腾推理环境搭建（CANN 7.0 + vLLM 0.4.2 补丁版）",
+summary:"【已归档】2025 年初的环境搭建文档，基于内部补丁版 vLLM 0.4.2。已由 KA-016 环境矩阵完全替代。",
+tags:["环境","部署","历史"],
+models:["通用"], framework:"vllm-ascend（前身补丁版）", fwVersion:"v0.4.2-patch", env:"CANN 7.0",
+author:"张启元", created:"2025-02-20", updated:"2026-04-03", reuseCount:0,
+statusReason:"被 KA-016 替代；补丁版工具链已下线。",
+code:[],issues:[],
+body:[{h:"归档说明",p:"内容对应的内部补丁分支与 CANN 7.0 工具链均已下线。仅为追溯历史部署问题保留。当前环境请见 KA-016。"}],
+validations:[],reuses:[],history:[{ver:"v2",date:"2026-04-03",by:"张启元",note:"归档，指向 KA-016"}]
+}
+];
+/* ---------- 知识缺口 ---------- */
+let GAPS = [
+{id:"GAP-01", q:"PD 分离（Prefill/Decode disaggregation）在 vllm-ascend 的部署方式与 KV 传输配置", hits:3, last:"2026-08-18", from:["王磊","孙晓东","李昊"], claimed:false},
+{id:"GAP-02", q:"SGLang 在 Ascend NPU 上的适配现状与可用特性清单", hits:2, last:"2026-08-15", from:["陈雨薇","王磊"], claimed:false},
+{id:"GAP-03", q:"Qwen3 MoE 专家负载均衡（EPLB）的监控与开启方法", hits:2, last:"2026-08-10", from:["张启元","李昊"], claimed:true, claimedBy:"李昊"},
+{id:"GAP-04", q:"SGLang overlap 调度在 NPU 流上的行为验证", hits:1, last:"2026-07-29", from:["孙晓东"], claimed:false}
+];
+
+/* ---------- REVIEW-DUE 队列元数据 ---------- */
+let REVIEW_META = {
+"KA-003": {
+  trigger:"代码变更", triggerDetail:"上游 vllm PR #17332「V1: move EngineCore into per-request ZMQ IO threads」合入，命中本资产关联路径 vllm/v1/engine/core.py",
+  detectedAt:"2026-08-04", priority:"高", usage30d:6,
+  aiSummary:"Diff 涉及 EngineCore 的进程/线程模型：core_busy_loop 拆分为输入线程 + 执行循环，EngineCoreClient 的 ZMQ socket 由每进程 1 对变为输入/输出分离的 2 对。本资产第 1 节「链路总览」中 ZMQ 提交描述、第 4 节「请求卡住」的排查方法（查单一 ZMQ 队列积压）可能失效。第 2、3 节（Scheduler 行为、Ascend hook 点）未受影响。",
+  diff:[
+    {t:"del", s:"-  def core_busy_loop(self): # 单循环内收发 ZMQ 消息"},
+    {t:"add", s:"+  def _process_input_sockets(self): # 独立输入线程"},
+    {t:"add", s:"+  def core_busy_loop(self): # 仅执行 step()，输入经队列解耦"}
+  ],
+  draft:"建议更新：第 1 节改为「AsyncLLM → EngineCoreClient（输入/输出双 ZMQ socket）→ EngineCore 输入线程入队 → core_busy_loop 消费执行」；第 4 节排查方法补充：请求卡住时需分别检查输入线程存活（jstack 输入队列深度）与执行循环 step 耗时，二者阻塞表现不同。"
+},
+"KA-010": {
+  trigger:"版本变更", triggerDetail:"团队环境基线 CANN 8.0.RC2 → 8.2.RC1（2026-08-01 生效），本资产声明适用环境为 8.0.RC2",
+  detectedAt:"2026-08-01", priority:"高", usage30d:4,
+  aiSummary:"CANN 8.2.RC1 变更点与本资产的交集：① 图缓存目录结构由平铺改为按 soc_version/精度分层（vllm-ascend#1391 已确认缓存复用失败）；② FIA 算子新增 kv_nz 布局，图模式下默认开启，与文中「按 batch 桶捕获」的 shape 约束叠加；③ TorchAir 冷启动时间实测由 ~25min 降至 ~11min，文中 CI 建议的收益数字过期。",
+  diff:[
+    {t:"del", s:"- 缓存目录 ~/.torchair_cache/<model_hash>/"},
+    {t:"add", s:"+ 缓存目录 ~/.torchair_cache/<soc_version>/<precision>/<model_hash>/"}
+  ],
+  draft:"建议更新：图缓存节改为分层目录结构并注明 8.2 起 CI 缓存卷需按 soc_version 区分；新增 kv_nz 布局说明及关闭开关 enable_kv_nz=false；冷启动数据更新为 8.2 实测值（11min / 缓存命中 3min）。"
+},
+"KA-018": {
+  trigger:"人工反馈", triggerDetail:"孙晓东 2026-08-14 反馈「内容可能过时」：0.10 起 EP 配置从 additional-config 迁移为一级参数，本文命令不可直接执行",
+  detectedAt:"2026-08-14", priority:"中", usage30d:2,
+  aiSummary:"对照 vllm-ascend v0.10.0rc1 参数表：--enable-expert-parallel 保留，但专家冗余与 EPLB 相关项由 additional-config JSON 迁移为 --expert-* 一级参数；HCCL_BUFFSIZE 建议值在 8.2 文档中调整为 1024（大 EP 度场景）。文中「负载观测」依赖的内部补丁 VLLM_MOE_LOG_LOAD 已被上游 metrics 端点替代。",
+  diff:[
+    {t:"del", s:"- --additional-config '{\"expert_tensor_parallel_size\": ...}'"},
+    {t:"add", s:"+ --expert-parallel-size N  (v0.10 一级参数)"}
+  ],
+  draft:"建议更新：配置示例整体迁移到 v0.10 参数写法；HCCL_BUFFSIZE 建议值区分 EP≤4 / EP>4 两档；负载观测节改为上游 /metrics 的 moe_expert_load 序列，并删除内部补丁说明。"
+}
+};
+
+/* ---------- 语义检索：同义词组（模拟向量召回） ---------- */
+const SYN = [
+  {group:["显存","内存","oom","hbm","memory","爆显存","out of memory"], tags:["显存","oom","kv-cache","量化","hbm","内存"]},
+  {group:["前缀缓存","prefix","radix","缓存复用","cache 复用","命中率"], tags:["radix-attention","prefix-cache","前缀缓存"]},
+  {group:["投机","speculative","eagle","mtp","draft","草稿模型","投机推理"], tags:["投机推理","speculative","eagle","mtp","draft-model"]},
+  {group:["图模式","图编译","graph","aclgraph","torchair","整图","编译"], tags:["图编译","aclgraph","torchair","graph"]},
+  {group:["调度","scheduler","batching","组批","批处理","连续批"], tags:["调度","continuous-batching","scheduler","overlap"]},
+  {group:["并行","tp","ep","dp","tensor parallel","expert parallel","切分"], tags:["并行策略","ep","张量并行","expert-parallel"]},
+  {group:["注意力","attention","mla","gqa","fa","flash"], tags:["attention","mla","gqa","flash-attention","backend"]},
+  {group:["调用链","链路","入口","forward","enginecore","执行流程","源码"], tags:["执行链路","enginecore","scheduler","worker","调用链"]},
+  {group:["部署","环境","安装","版本","兼容","升级"], tags:["环境","版本矩阵","部署","安装","CANN"]},
+  {group:["量化","w8a8","int8","fp8","modelslim"], tags:["量化","w8a8"]},
+  {group:["压测","benchmark","ttft","吞吐","时延","性能"], tags:["benchmark","ttft","压测","性能","吞吐"]},
+  {group:["kv cache","kvcache","kv 缓存","块","block"], tags:["kv-cache"]},
+  {group:["多模态","视觉","vl","vit","图片"], tags:["多模态","vit","qwen2.5-vl"]},
+  {group:["moe","专家","路由"], tags:["moe","ep","expert-parallel"]}
+];
+
+/* ---------- AI 问答预置 ---------- */
+const QA_PRESETS = [
+{
+  match:["mla","deepseek","开","怎么","支持"], minHit:2,
+  q:"DeepSeek-V3 在 vllm-ascend 上怎么启用 MLA？有什么限制？",
+  answer:{
+    conclusion:"MLA 不需要手动开启：vllm-ascend 识别到 DeepSeek V3/R1 结构后自动选择 <code>AscendMLABackend</code>（尝试手动改回普通 backend 会被平台校验拦截）。需要注意的是三个当前限制：MLA 与 aclgraph 组合仅支持固定 batch 桶；chunked prefill 下 <code>max_num_batched_tokens</code> 必须为 block_size 整数倍；TP 不切 MLA 头维度、只切 MoE/FFN。",
+    cites:[
+      {asset:"KA-002", frag:"「backend 选择走 get_attn_backend()，MLA 命中 AscendMLABackend；decode 阶段使用 matrix-absorb 形式……」（第 2 节）"},
+      {asset:"KA-009", frag:"「MLA 模型 → 自动 ASCEND_MLA，不可手动改回」（选型矩阵）"}
+    ],
+    risks:[]
+  }
+},
+{
+  match:["图模式","aclgraph","torchair","开启","图编译"], minHit:1,
+  q:"aclgraph / TorchAir 图模式怎么开？",
+  answer:{
+    conclusion:"按现有资产：aclgraph 默认对 decode 按 batch 桶捕获；TorchAir 整图通过 <code>--additional-config '{\"torchair_graph_config\":{\"enabled\":true}}'</code> 开启，主要用于 DeepSeek 系列。<b>但请先阅读下方风险提示再执行。</b>",
+    cites:[
+      {asset:"KA-010", frag:"「默认 aclgraph 按 batch 桶捕获 decode 图；TorchAir 走 --additional-config ……整图编译，冷启动慢但稳态更优」（第 1 节）"}
+    ],
+    risks:[{type:"warn", text:"引用的 KA-010 当前处于 REVIEW-DUE（可能过时）：团队环境已升级 CANN 8.2.RC1，而该文基于 8.0.RC2 撰写，图缓存目录结构已确认变化（vllm-ascend#1391）。结论中的启用方式大概率仍有效，但图缓存与约束细节请以复核结果为准，或先查阅队列中的 AI 变化摘要。"}]
+  }
+},
+{
+  match:["ray","多机","多卡","部署","mp"], minHit:2,
+  q:"Ascend 上多机多卡部署应该用 Ray 还是 MP？",
+  answer:{
+    conclusion:"现存资产存在两种说法，且结论相反。系统不替你裁决，按可信度排序展示差异：",
+    conflict:{
+      a:{asset:"KA-016", stand:"（VERIFIED，2026-08-11 更新）v1 引擎多卡走 MP executor，多机由部署平台静态编排 + --data-parallel-* 参数族。"},
+      b:{asset:"KA-008", stand:"（STALE，已确认失效）基于 vLLM 0.6.x 的 Ray 部署方式。2026-03 已确认在 v1 引擎下 HCCL 初始化死锁，按其操作会启动失败。"}
+    },
+    cites:[
+      {asset:"KA-016", frag:"「v0.9.2 推荐组合……多机部署见部署章节」（结论）"},
+      {asset:"KA-008", frag:"「v1 引擎多卡走 MP executor……Ray 方案在 Ascend 的 HCCL 初始化存在时序死锁，已停止维护」（失效说明）"}
+    ],
+    risks:[{type:"bad", text:"KA-008 为 STALE 资产，仅作为「为什么不用 Ray」的历史依据展示，不参与结论生成。当前做法以 VERIFIED 的 KA-016 为准。"}]
+  }
+},
+{
+  match:["pd 分离","pd分离","disagg","prefill decode 分离","分离部署"], minHit:1,
+  q:"PD 分离在 vllm-ascend 上怎么部署？",
+  answer:{ notFound:true,
+    conclusion:"没有找到经过验证的知识。知识库中当前没有任何状态为 VERIFIED 或 DRAFT 的资产覆盖「PD 分离在 vllm-ascend 的部署」。该问题已被记录为知识缺口（近 30 天第 4 次提出），你可以在首页认领并生成草稿，或联系最近关注此方向的 王磊 / 孙晓东。",
+    cites:[], risks:[]
+  }
+}
+];
+
+/* ---------- 看板静态序列（历史口径数据） ---------- */
+const DASH = {
+  reuseRate:{months:["4月","5月","6月","7月","8月"], vals:[41,49,55,61,68], num:41, den:60},
+  searchOk:{months:["4月","5月","6月","7月","8月"], vals:[58,63,69,72,76]},
+  rework:{months:["4月","5月","6月","7月","8月"], vals:[86,71,58,52,31]},
+  notFound30d:14
+};
+
+/* ---------- 运行时状态 ---------- */
+let REUSE_LOG = [];       // 本会话新增复用事件
+let seq = 19;             // 新资产编号
+let searchState = {q:"", type:"", model:"", fw:"", status:"", hist:false};
+
+/* ================= 工具函数 ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+const byId = id => ASSETS.find(a=>a.id===id);
+function daysAgo(d){ return Math.round((new Date(TODAY) - new Date(d))/86400000); }
+function fmtAgo(d){ const n=daysAgo(d); if(n<=0)return"今天"; if(n<30)return n+" 天前"; if(n<365)return Math.round(n/30)+" 个月前"; return Math.round(n/365)+" 年前"; }
+function pill(st){ const zh=STATUS_ZH[st]; const code=st.replace("_","-"); return `<span class="pill ${st}">${code}${st==="VERIFIED"?"":" · "+zh}</span>`; }
+function tierChip(t){ return `<span class="tier ${t}">${TIER_ZH[t]}</span>`; }
+function typeChip(t){ return `<span class="tier">${TYPE_ZH[t]}</span>`; }
+function toast(msg){
+  const b=document.createElement("div"); b.className="toast"; b.innerHTML=msg;
+  $("#toastbox").appendChild(b); setTimeout(()=>b.remove(), 5200);
+}
+function bodyText(a){ return a.body.map(s=>s.h+" "+s.p).join(" ").replace(/<[^>]+>/g,""); }
+function highlight(text, terms){
+  let h = esc(text);
+  terms.filter(t=>t.length>=2).forEach(t=>{
+    try{ h = h.replace(new RegExp("("+t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+")","gi"),"<mark>$1</mark>"); }catch(e){}
+  });
+  return h;
+}
+
+/* ================= 混合检索评分 =================
+   总分 = 关键词 + 语义 + 状态权重 + 版本/框架/模型匹配 + 新鲜度 + 复用证据
+   STALE/ARCHIVED 默认不进入结果，仅“查看历史资产”开启后返回（不参与加权排序倾斜）。 */
+function tokenize(q){
+  return q.toLowerCase().split(/[\s,，、;；/]+/).filter(Boolean);
+}
+function scoreAsset(a, q, f){
+  const terms = tokenize(q);
+  const parts = [];
+  let total = 0;
+
+  // 1) 关键词匹配（字段加权）
+  let kw = 0;
+  const tl=a.title.toLowerCase(), sm=a.summary.toLowerCase(), tg=a.tags.join(" ").toLowerCase(), bd=bodyText(a).toLowerCase();
+  terms.forEach(t=>{
+    if(tl.includes(t)) kw+=4;
+    if(tg.includes(t)) kw+=3;
+    if(sm.includes(t)) kw+=2;
+    else if(bd.includes(t)) kw+=1;
+  });
+  kw = Math.min(kw, 18);
+  if(kw>0){ total+=kw; parts.push({l:"关键词",v:kw}); }
+
+  // 2) 语义关联（同义词组 → 标签召回，模拟向量近邻）
+  let sem = 0; const semHitGroups=[];
+  const qLow = q.toLowerCase();
+  SYN.forEach(g=>{
+    const hitQ = g.group.some(w=>qLow.includes(w));
+    if(!hitQ) return;
+    const hitA = g.tags.some(t=>a.tags.map(x=>x.toLowerCase()).includes(t.toLowerCase()));
+    if(hitA){ sem+=6; semHitGroups.push(g.group[0]); }
+  });
+  sem = Math.min(sem, 12);
+  if(sem>0){ total+=sem; parts.push({l:"语义:"+semHitGroups.join("/"),v:sem}); }
+
+  if(kw===0 && sem===0) return null; // 完全不相关
+
+  // 3) 状态权重
+  const stW = {VERIFIED:14, DRAFT:0, REVIEW_DUE:-10, STALE:0, ARCHIVED:0}[a.status];
+  if(stW!==0){ total+=stW; parts.push({l:"状态 "+a.status.replace("_","-"),v:stW,cls:stW>0?"pos":"neg"}); }
+
+  // 4) 筛选器 / 查询中的框架、模型匹配
+  const fwQ = f.fw || (qLow.includes("sglang")?"sglang":(qLow.includes("ascend")||qLow.includes("vllm")?"vllm-ascend":""));
+  if(fwQ){
+    const m = a.framework.toLowerCase().includes(fwQ.toLowerCase()) || a.framework==="通用";
+    total += m?6:-8; parts.push({l:"框架"+(m?"匹配":"不符"),v:m?6:-8,cls:m?"pos":"neg"});
+  }
+  if(f.model){
+    const m = a.models.some(x=>x.includes(f.model)) || a.models.includes("通用");
+    total += m?6:-8; parts.push({l:"模型"+(m?"匹配":"不符"),v:m?6:-8,cls:m?"pos":"neg"});
+  }
+
+  // 5) 新鲜度
+  const d = daysAgo(a.updated);
+  const fr = d<30?5:(d<90?3:(d<180?1:0));
+  if(fr>0){ total+=fr; parts.push({l:"更新 "+fmtAgo(a.updated),v:fr}); }
+
+  // 6) 复用证据
+  const ru = Math.min(Math.round(a.reuseCount*0.4), 8);
+  if(ru>0){ total+=ru; parts.push({l:"复用×"+a.reuseCount,v:ru}); }
+
+  return {total:Math.round(total*10)/10, parts, terms};
+}
+function runSearch(f){
+  const isHist = f.hist;
+  let pool = ASSETS.filter(a=>{
+    const dead = (a.status==="STALE"||a.status==="ARCHIVED");
+    if(isHist ? !dead : dead) return false;
+    if(f.type && a.type!==f.type) return false;
+    if(f.status && a.status!==f.status) return false;
+    return true;
+  });
+  const out=[];
+  pool.forEach(a=>{
+    const s = f.q ? scoreAsset(a,f.q,f) : {total:(a.status==="VERIFIED"?14:0)+Math.min(a.reuseCount*.4,8), parts:[{l:"无查询词：按状态+复用排序",v:0}], terms:[]};
+    if(f.q && !s) return;
+    if(!f.q){ // 无词浏览也应用框架/模型过滤
+      if(f.fw && !(a.framework.toLowerCase().includes(f.fw)||a.framework==="通用")) return;
+      if(f.model && !(a.models.some(x=>x.includes(f.model))||a.models.includes("通用"))) return;
+    }
+    out.push({a, s});
+  });
+  out.sort((x,y)=>y.s.total-x.s.total);
+  return out;
+}
+
+/* ================= 页面渲染 ================= */
+function metaLine(a){
+  return `<div class="meta">
+    <span>${a.models.join(" / ")}</span><span class="sep"></span>
+    <span class="mono">${esc(a.framework)} ${esc(a.fwVersion)}</span><span class="sep"></span>
+    <span>更新 ${fmtAgo(a.updated)}</span><span class="sep"></span>
+    <span>复用 <b class="num">${a.reuseCount}</b> 次</span><span class="sep"></span>
+    <span>${esc(a.author)}</span></div>`;
+}
+function assetLink(id){ const a=byId(id); return a?`<a href="#/asset/${id}">${esc(a.title)}</a>`:id; }
+
+/* ---------- 首页 ---------- */
+function renderHome(){
+  const nVer=ASSETS.filter(a=>a.status==="VERIFIED").length;
+  const nRev=ASSETS.filter(a=>a.status==="REVIEW_DUE").length;
+  const nAll=ASSETS.filter(a=>a.status!=="ARCHIVED").length;
+  const recent=[...ASSETS].filter(a=>a.validations.length&&a.status==="VERIFIED").sort((x,y)=>y.validations[0].date.localeCompare(x.validations[0].date)).slice(0,5);
+  const hot=[...ASSETS].filter(a=>a.status!=="STALE"&&a.status!=="ARCHIVED").sort((x,y)=>y.reuseCount-x.reuseCount).slice(0,5);
+  return `
+  <div class="pagehead"><h1>找推理知识，先看可信度</h1><span class="sub">覆盖 vLLM Ascend / SGLang · 模型结构 · 执行链路 · 推理特性</span></div>
+  <form class="searchrow" onsubmit="goSearch(event)">
+    <input id="homeq" type="search" placeholder="搜索：如「MLA 图模式限制」「显存 OOM」「EngineCore 调用链」…" autocomplete="off">
+    <button class="btn pri" type="submit">搜索</button>
+  </form>
+  <div class="filterbar">
+    快捷入口：
+    <a class="chip" href="#/search?q=${encodeURIComponent("显存 OOM")}">显存 OOM</a>
+    <a class="chip" href="#/search?q=${encodeURIComponent("投机推理")}">投机推理</a>
+    <a class="chip" href="#/search?q=${encodeURIComponent("图模式")}">图模式</a>
+    <a class="chip" href="#/search?q=${encodeURIComponent("调用链")}">执行链路</a>
+    <a class="chip" href="#/search?hist=1">查看历史资产（STALE / ARCHIVED）</a>
+  </div>
+  <div class="statstrip">
+    <div class="st"><div class="v">${nAll}</div><div class="l">在库资产（不含归档）</div></div>
+    <div class="st"><div class="v">${nVer}</div><div class="l">VERIFIED 已验证</div></div>
+    <div class="st"><div class="v">${nRev}</div><div class="l">待复核 REVIEW-DUE</div></div>
+    <div class="st"><div class="v">${GAPS.filter(g=>!g.claimed).length}</div><div class="l">待认领知识缺口</div></div>
+    <div class="st"><div class="v">68<span style="font-size:12px;color:var(--ink3)">%</span></div><div class="l">本月有效复用率</div></div>
+  </div>
+  <div class="home-cols">
+    <div>
+      <div class="section-t">最近验证</div>
+      ${recent.map((a,i)=>`<div class="mini-item"><span class="n">${esc(a.validations[0].date.slice(5))}</span><span style="flex:1;min-width:0"><a href="#/asset/${a.id}">${esc(a.title)}</a><div class="meta" style="margin-top:1px"><span>${esc(a.validations[0].by)} 验证</span><span class="sep"></span><span>${esc(a.validations[0].note)}</span></div></span>${pill(a.status)}</div>`).join("")}
+      <div class="section-t">热门知识（按非作者复用次数）</div>
+      ${hot.map(a=>`<div class="mini-item"><span class="n num">×${a.reuseCount}</span><span style="flex:1;min-width:0"><a href="#/asset/${a.id}">${esc(a.title)}</a></span>${pill(a.status)}</div>`).join("")}
+    </div>
+    <div>
+      <div class="section-t">待补充知识缺口（来自「没有找到答案」反馈）</div>
+      <div class="card" style="padding:6px 16px">
+      ${GAPS.map(g=>`<div class="gap-item">
+        <div class="q">${esc(g.q)}</div>
+        <div class="m">近 30 天被问 <b class="num">${g.hits}</b> 次 · 最近 ${fmtAgo(g.last)} · 提出人：${g.from.join("、")}
+        ${g.claimed?`· <span style="color:var(--ok)">已由 ${esc(g.claimedBy)} 认领</span>`:`· <button class="btn sm" onclick="claimGap('${g.id}')">认领并生成草稿</button>`}</div>
+      </div>`).join("")}
+      </div>
+      <div class="section-t">状态规则速览</div>
+      <div class="card" style="font-size:12px;line-height:2">
+        ${pill("VERIFIED")} 已由非作者成功复用或人工验证，默认优先展示<br>
+        ${pill("DRAFT")} 工作记录 / 未经非作者验证，可长期存在、不强制维护<br>
+        ${pill("REVIEW_DUE")} 关联代码或版本变化、或被反馈过时，降权展示<br>
+        ${pill("STALE")} 确认失效，不进入正常搜索，仅历史入口可见<br>
+        ${pill("ARCHIVED")} 已被替代或重复，仅历史入口可见
+      </div>
+    </div>
+  </div>`;
+}
+function goSearch(e){ e.preventDefault(); const q=$("#homeq").value.trim(); location.hash="#/search?q="+encodeURIComponent(q); }
+function claimGap(id){
+  const g=GAPS.find(x=>x.id===id); if(!g) return;
+  g.claimed=true; g.claimedBy=ME;
+  toast(`已认领缺口，AI 将基于相关 Issue / 会话生成草稿底稿 → 见「沉淀记录」页`);
+  route();
+}
+
+/* ---------- 搜索结果页 ---------- */
+function renderSearch(f){
+  const res=runSearch(f);
+  const models=[...new Set(ASSETS.flatMap(a=>a.models))].filter(m=>m!=="通用");
+  const opts=(list,cur)=>list.map(o=>`<option value="${esc(o)}"${o===cur?" selected":""}>${esc(o)}</option>`).join("");
+  return `
+  <div class="pagehead"><h1>搜索结果</h1><span class="sub">${f.hist?"历史资产模式：仅展示 STALE / ARCHIVED":"排序：相关度 + 状态可信度 + 版本匹配 + 新鲜度 + 复用证据；VERIFIED 优先"}</span></div>
+  <form class="searchrow" onsubmit="reSearch(event)">
+    <input id="sq" type="search" value="${esc(f.q)}" placeholder="继续搜索…" autocomplete="off">
+    <button class="btn pri" type="submit">搜索</button>
+  </form>
+  <div class="filterbar">
+    <label>类型 <select id="f-type" onchange="applyFilters()"><option value="">全部</option>${Object.keys(TYPE_ZH).map(k=>`<option value="${k}"${k===f.type?" selected":""}>${TYPE_ZH[k]}</option>`).join("")}</select></label>
+    <label>模型 <select id="f-model" onchange="applyFilters()"><option value="">全部</option>${opts(models,f.model)}</select></label>
+    <label>框架 <select id="f-fw" onchange="applyFilters()"><option value="">全部</option>${opts(["vllm-ascend","sglang"],f.fw)}</select></label>
+    <label>状态 <select id="f-status" onchange="applyFilters()"><option value="">全部</option>${opts(f.hist?["STALE","ARCHIVED"]:["VERIFIED","DRAFT","REVIEW_DUE"],f.status)}</select></label>
+    <label class="tog"><input type="checkbox" id="f-hist" ${f.hist?"checked":""} onchange="applyFilters()"> 查看历史资产（STALE/ARCHIVED）</label>
+    <span style="margin-left:auto;color:var(--ink3)">${res.length} 条结果</span>
+  </div>
+  ${res.length?res.map(r=>{
+    const a=r.a;
+    return `<div class="result">
+      <h3><a href="#/asset/${a.id}">${highlight(a.title,r.s.terms)}</a>&nbsp; ${pill(a.status)} ${tierChip(a.tier)} ${typeChip(a.type)}</h3>
+      <div class="sum">${highlight(a.summary,r.s.terms)}</div>
+      ${metaLine(a)}
+      <details class="why"><summary>为什么排在这里（得分 ${r.s.total}）</summary>
+        <div class="parts">${r.s.parts.map(p=>`<span class="p ${p.cls||""}">${esc(p.l)} <b>${p.v>0?"+":""}${p.v}</b></span>`).join("")}</div>
+      </details>
+    </div>`;
+  }).join(""):`<div class="empty">没有匹配的资产。<br><br><button class="btn" onclick="reportGap()">没有找到答案 —— 记录为知识缺口</button><div style="margin-top:8px;font-size:11.5px">缺口会进入首页待补充列表，累计后可由成员认领生成草稿。</div></div>`}
+  ${res.length?`<div style="margin-top:14px"><button class="btn sm" onclick="reportGap()">这些结果没有解决我的问题 → 记录知识缺口</button></div>`:""}`;
+}
+function reSearch(e){ e.preventDefault(); searchState.q=$("#sq").value.trim(); pushSearch(); }
+function applyFilters(){
+  searchState.q=$("#sq").value.trim();
+  searchState.type=$("#f-type").value; searchState.model=$("#f-model").value;
+  searchState.fw=$("#f-fw").value; searchState.status=$("#f-status").value;
+  searchState.hist=$("#f-hist").checked;
+  pushSearch();
+}
+function pushSearch(){
+  const s=searchState, p=new URLSearchParams();
+  if(s.q)p.set("q",s.q); if(s.type)p.set("type",s.type); if(s.model)p.set("model",s.model);
+  if(s.fw)p.set("fw",s.fw); if(s.status)p.set("status",s.status); if(s.hist)p.set("hist","1");
+  location.hash="#/search?"+p.toString();
+}
+function reportGap(){
+  const q=searchState.q||"（无关键词浏览）";
+  const ex=GAPS.find(g=>g.q.toLowerCase().includes(q.toLowerCase())&&q.length>1);
+  if(ex){ ex.hits++; ex.last=TODAY; if(!ex.from.includes(ME))ex.from.push(ME); }
+  else GAPS.unshift({id:"GAP-"+Math.floor(10+GAPS.length),q:"关于「"+q+"」的可用知识",hits:1,last:TODAY,from:[ME],claimed:false});
+  toast(`已记录知识缺口：「${esc(q)}」<br>系统同时记下了你的搜索词与时间，形成需求事件。`);
+}
+
+/* ---------- AI 问答 ---------- */
+let QA_LOG=[];
+function renderAsk(){
+  return `
+  <div class="pagehead"><h1>AI 问答</h1><span class="sub">仅基于知识资产回答 · 引用来源与状态 · STALE 不参与结论 · 冲突并列展示</span></div>
+  <form class="searchrow" onsubmit="askSubmit(event)">
+    <input id="askq" type="search" placeholder="问一个推理问题，例如「DeepSeek MLA 有什么限制」…" autocomplete="off">
+    <button class="btn pri" type="submit">提问</button>
+  </form>
+  <div class="preset-qs">
+    ${QA_PRESETS.map((p,i)=>`<button onclick="askPreset(${i})">${esc(p.q)}</button>`).join("")}
+  </div>
+  <div id="qalog">${QA_LOG.join("")}</div>
+  ${QA_LOG.length?"":`<div class="empty" style="margin-top:20px">回答规则：每个结论必须给出来源资产、命中段落、资产状态与适用版本；没有可靠依据时明确说「没有找到经过验证的知识」，不编造。</div>`}`;
+}
+function askPreset(i){ renderAnswer(QA_PRESETS[i].q, QA_PRESETS[i]); }
+function askSubmit(e){
+  e.preventDefault(); const q=$("#askq").value.trim(); if(!q)return;
+  const qLow=q.toLowerCase();
+  let best=null,bestN=0;
+  QA_PRESETS.forEach(p=>{ const n=p.match.filter(k=>qLow.includes(k)).length; if(n>=p.minHit&&n>bestN){best=p;bestN=n;} });
+  renderAnswer(q,best);
+}
+function citeBlock(c){
+  const a=byId(c.asset);
+  return `<div class="cite"><div class="ct-h">${pill(a.status)}<a href="#/asset/${a.id}"><b>${a.id}</b> ${esc(a.title)}</a></div>
+  <div class="meta"><span>适用：<span class="mono">${esc(a.framework)} ${esc(a.fwVersion)}</span></span><span class="sep"></span><span>${a.models.join("/")}</span><span class="sep"></span><span>更新 ${fmtAgo(a.updated)}</span></div>
+  ${c.frag?`<div class="frag">${c.frag}</div>`:""}</div>`;
+}
+let _qaQ="";
+function renderAnswer(q, preset){
+  _qaQ=q;
+  let html=`<div class="qa-q">${esc(q)}</div><div class="qa-a">`;
+  if(preset){
+    const A=preset.answer;
+    if(A.notFound){
+      html+=`<div class="callout bad"><span class="ct">没有找到经过验证的知识</span>${A.conclusion}</div>
+      <p><button class="btn sm" onclick="reportGapFromQA()">记录 / 累计为知识缺口</button></p>`;
+    }else{
+      html+=`<p>${A.conclusion}</p>`;
+      if(A.conflict){
+        html+=`<div class="callout warn"><span class="ct">多份资产结论冲突 —— 系统展示差异，不代为裁决</span>
+        <b>说法 A：</b>${assetLink(A.conflict.a.asset)}<br><span style="color:var(--ink2)">${A.conflict.a.stand}</span><br>
+        <b>说法 B：</b>${assetLink(A.conflict.b.asset)}<br><span style="color:var(--ink2)">${A.conflict.b.stand}</span></div>`;
+      }
+      (A.risks||[]).forEach(r=>{ html+=`<div class="callout ${r.type}"><span class="ct">${r.type==="bad"?"来源可信度警告":"可能过时提示"}</span>${r.text}</div>`; });
+      if(A.cites.length){ html+=`<div style="font-size:11.5px;color:var(--ink3);margin-top:10px">来源（${A.cites.length}）：</div>`+A.cites.map(citeBlock).join(""); }
+    }
+  }else{
+    const res=runSearch({q,type:"",model:"",fw:"",status:"",hist:false}).slice(0,3);
+    if(!res.length){
+      html+=`<div class="callout bad"><span class="ct">没有找到经过验证的知识</span>知识库中没有与该问题相关的资产。已可记录为知识缺口，供后续沉淀。</div>
+      <p><button class="btn sm" onclick="reportGapFromQA()">记录为知识缺口</button></p>`;
+    }else{
+      html+=`<p>该问题没有命中预置的高置信回答。以下为按相关度检索到的资产，<b>系统未将其合成为确定性结论</b>，请打开来源核对适用版本与状态：</p>`;
+      html+=res.map(r=>citeBlock({asset:r.a.id, frag:esc(r.a.summary)})).join("");
+      if(res.some(r=>r.a.status==="REVIEW_DUE")) html+=`<div class="callout warn"><span class="ct">可能过时提示</span>以上来源中含 REVIEW-DUE 资产，其内容待复核，引用时请谨慎。</div>`;
+    }
+  }
+  html+=`</div>`;
+  QA_LOG.push(html); route();
+}
+function reportGapFromQA(){
+  const q=_qaQ||"（未记录问题）";
+  const ex=GAPS.find(g=>g.q.includes(q.slice(0,6)));
+  if(ex){ex.hits++;ex.last=TODAY;if(!ex.from.includes(ME))ex.from.push(ME);}
+  else GAPS.unshift({id:"GAP-"+Math.floor(10+GAPS.length),q,hits:1,last:TODAY,from:[ME],claimed:false});
+  toast("已记录知识缺口，累计次数将影响其在首页的优先级。");
+}
+
+/* ---------- 知识详情页 ---------- */
+let fbOpen=null;
+function renderAsset(id){
+  const a=byId(id);
+  if(!a) return `<div class="empty">资产不存在</div>`;
+  const dead=(a.status==="STALE"||a.status==="ARCHIVED");
+  const meta=REVIEW_META[a.id];
+  return `
+  <div class="pagehead" style="margin-bottom:2px"><h1 style="max-width:64ch">${esc(a.title)}</h1></div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 14px">
+    ${pill(a.status)} ${tierChip(a.tier)} ${typeChip(a.type)}
+    <span class="meta"><span class="mono">${a.id}</span><span class="sep"></span><span>${esc(a.author)} 创建于 ${a.created}</span><span class="sep"></span><span>更新 ${a.updated}</span></span>
+  </div>
+  ${a.status==="DRAFT"?`<div class="callout info"><span class="ct">尚未验证</span>本内容为${TIER_ZH[a.tier]}，还没有非作者成功复用的记录。可以参考，但请自行核对环境与版本；你复用成功后点下方「有用」即可为它提供验证证据。</div>`:""}
+  ${a.status==="REVIEW_DUE"?`<div class="callout warn"><span class="ct">可能过时 —— 已进入复核队列</span>${esc(a.statusReason)} ${meta?`<a href="#/review">查看 AI 变化摘要与更新草稿 →</a>`:""}</div>`:""}
+  ${a.status==="STALE"?`<div class="callout bad"><span class="ct">已确认失效</span>${esc(a.statusReason)}</div>`:""}
+  ${a.status==="ARCHIVED"?`<div class="callout bad" style="background:var(--arch-bg);border-color:var(--arch-line)"><span class="ct" style="color:var(--arch)">已归档</span>${esc(a.statusReason)}</div>`:""}
+  <div class="detail-grid">
+    <div class="doc">
+      ${a.body.map(s=>`<h2>${esc(s.h)}</h2><p>${s.p}</p>`).join("")}
+      ${dead?"":`
+      <div class="feedbackbar" id="fbbar">
+        <span class="q">用完这份知识了？一次点击记录结果：</span>
+        <button class="btn ok sm" onclick="fbUseful('${a.id}')">✓ 有用，完成任务</button>
+        <button class="btn warn sm" onclick="fbStale('${a.id}')">内容可能过时</button>
+        <button class="btn sm" onclick="reportGap()">没有找到答案</button>
+        <span style="font-size:11px;color:var(--ink3)">系统自动记录：使用者、资产版本、时间；无需填表。</span>
+      </div>
+      <div id="fbform"></div>`}
+    </div>
+    <aside>
+      <div class="sidebl card">
+        <h4>适用环境</h4>
+        <dl class="kv">
+          <dt>模型</dt><dd>${a.models.join("、")}</dd>
+          <dt>框架</dt><dd class="mono" style="font-size:11.5px">${esc(a.framework)} ${esc(a.fwVersion)}</dd>
+          ${a.env&&a.env!=="—"?`<dt>依赖</dt><dd class="mono" style="font-size:11.5px">${esc(a.env)}</dd>`:""}
+          <dt>状态原因</dt><dd style="color:var(--ink2)">${esc(a.statusReason)}</dd>
+        </dl>
+      </div>
+      ${a.code.length?`<div class="sidebl card"><h4>关联代码（变更将触发复核）</h4>
+        ${a.code.map(c=>`<div class="row"><span class="mono" style="font-size:11px">${esc(c.repo)}</span><br><span class="mono" style="font-size:11.5px;color:var(--accent)">${esc(c.path)}</span><br><span class="d">${esc(c.note)}</span></div>`).join("")}</div>`:""}
+      ${a.issues.length?`<div class="sidebl card"><h4>关联 Issue / PR</h4>
+        ${a.issues.map(i=>`<div class="row"><span class="mono" style="font-size:11px">${esc(i.id)}</span> ${esc(i.t)}</div>`).join("")}</div>`:""}
+      <div class="sidebl card"><h4>验证记录（${a.validations.length}）</h4>
+        ${a.validations.length?a.validations.map(v=>`<div class="row"><b>${esc(v.by)}</b> · ${v.date} · <span style="color:${v.result==="通过"?"var(--ok)":"var(--bad)"}">${esc(v.result)}</span><br><span class="d">${esc(v.note)}</span></div>`).join(""):`<div class="row d" style="color:var(--ink3)">暂无非作者验证</div>`}</div>
+      <div class="sidebl card"><h4>复用记录（${a.reuses.length}）</h4>
+        ${a.reuses.length?a.reuses.map(r=>`<div class="row"><b>${esc(r.by)}</b> · ${r.date}<br><span class="d">${esc(r.task)}</span></div>`).join(""):`<div class="row" style="color:var(--ink3)">暂无</div>`}</div>
+      ${a.history.length?`<div class="sidebl card"><h4>历史版本</h4>
+        ${a.history.map(h=>`<div class="row"><span class="mono">${esc(h.ver)}</span> · ${h.date} · ${esc(h.by)}<br><span class="d">${esc(h.note)}</span></div>`).join("")}</div>`:""}
+    </aside>
+  </div>`;
+}
+function fbUseful(id){
+  const box=$("#fbform");
+  box.innerHTML=`<div class="card" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px">这次用它做了什么？（可留空）</span>
+    <input id="fbtask" type="text" placeholder="如：客户环境部署 / 精度排查…" style="flex:1;min-width:180px;border:1px solid var(--border2);background:var(--surface);color:var(--ink);border-radius:5px;padding:5px 9px;font-size:12.5px">
+    <button class="btn pri sm" onclick="fbUsefulConfirm('${id}')">确认记录</button>
+  </div>`;
+  $("#fbtask").focus();
+}
+function fbUsefulConfirm(id){
+  const a=byId(id); const task=$("#fbtask").value.trim()||"（未填写任务说明）";
+  a.reuseCount++; a.reuses.unshift({by:ME,date:TODAY,task});
+  REUSE_LOG.push({asset:id,by:ME,date:TODAY,task,ver:a.fwVersion,q:searchState.q});
+  let up="";
+  if(a.status==="DRAFT" && a.author!==ME){
+    a.status="VERIFIED";
+    a.validations.unshift({by:ME,date:TODAY,note:"非作者复用成功："+task,result:"通过"});
+    a.statusReason="由非作者（"+ME+"）成功复用，自动升级为 VERIFIED。";
+    up=`<br><b>该资产已凭「非作者成功复用」证据自动升级为 VERIFIED。</b>`;
+  }else if(a.status==="DRAFT"){
+    up=`<br>你是作者本人，本次复用不作为升级 VERIFIED 的证据。`;
+  }
+  toast(`已记录复用事件：${ME} · ${TODAY} · ${esc(a.id)} @ ${esc(a.fwVersion)}${up}`);
+  route();
+}
+function fbStale(id){
+  const a=byId(id);
+  if(a.status!=="REVIEW_DUE"){
+    const old=a.status;
+    a.status="REVIEW_DUE";
+    a.statusReason=`${ME} ${TODAY} 反馈「内容可能过时」，等待复核。`;
+    REVIEW_META[id]={trigger:"人工反馈",triggerDetail:`${ME} ${TODAY} 反馈「内容可能过时」（原状态 ${old}）`,detectedAt:TODAY,priority:a.reuseCount>10?"高":"中",usage30d:Math.min(a.reuseCount,9),
+      aiSummary:"（模拟）AI 将对照该资产关联代码路径的最近 diff 与当前环境基线，生成受影响内容摘要。",diff:[],draft:"（模拟）AI 更新草稿将在复核队列中生成。"};
+    toast(`已将 ${esc(id)} 标记为 REVIEW-DUE 并加入复核队列。搜索中它将降权并显示「可能过时」。`);
+  }else toast("该资产已在复核队列中。");
+  route();
+}
+
+/* ---------- 轻量沉淀页 ---------- */
+function renderCapture(){
+  return `
+  <div class="pagehead"><h1>沉淀一条工作记录</h1><span class="sub">AI 已从你的调试会话生成草稿 —— 你只需确认三件事，全程 < 1 分钟</span></div>
+  <div class="callout info" style="max-width:900px"><span class="ct">低负担约定</span>发布为 DRAFT 不需要评审、不需要承诺维护、不强制补齐字段。只有当它被别人搜到并用上时，系统才会请你（或使用者）补充版本与验证信息。</div>
+  <div class="cap-grid">
+    <div>
+      <div class="section-t">来源 · AI 自动提取自</div>
+      <div class="srcbox">
+        <div style="color:var(--ink3)">// Claude Code 会话 #8f3a · 2026-08-20 14:32 · 节选</div>
+        <div><span class="who">wanglei&gt;</span> Qwen3-30B-A3B 在 800I A2 单机 TP4 上首 token 要 8 秒多，帮我看看</div>
+        <div><span class="who">agent&gt;</span> 日志显示长 prompt 被切成 4 个 chunk 串行 prefill，max_num_batched_tokens=2048（默认值）…</div>
+        <div><span class="who">wanglei&gt;</span> 调到 8192 再试</div>
+        <div><span class="who">agent&gt;</span> TTFT 1.9s。注意 aclgraph 捕获桶按预算变化需要重新 warmup…</div>
+        <div style="color:var(--ink3)">// 关联 diff：deploy/qwen3-30b.yaml (+2 −1)</div>
+      </div>
+      <div class="section-t">AI 同时自动带出</div>
+      <div class="card" style="font-size:12px;line-height:2">
+        分类：<span class="tier">推理特性</span> → 调度 / TTFT<br>
+        关联代码：<span class="mono" style="font-size:11px">vllm/v1/core/sched/scheduler.py</span><br>
+        相似资产：${assetLink("KA-006")}（不重复，互补）<br>
+        命中缺口：无
+      </div>
+    </div>
+    <div>
+      <div class="section-t">只确认这三项</div>
+      <div class="card">
+        <div class="formfield"><label>① 问题（这条记录解决了什么）</label>
+        <input id="cap-q" type="text" value="Qwen3-30B-A3B 在 800I A2 单机 TP4 上 TTFT 异常（>8s）"></div>
+        <div class="formfield"><label>② 环境（AI 已带出，可修改）</label>
+        <div class="chips" style="margin-top:4px">
+          <span class="chip on mono">vllm-ascend v0.10.0rc1</span>
+          <span class="chip on mono">CANN 8.2.RC1</span>
+          <span class="chip on">Qwen3-30B-A3B</span>
+          <span class="chip on">Atlas 800I A2 · TP4</span>
+        </div></div>
+        <div class="formfield"><label>③ 结论（AI 草拟，请核对）</label>
+        <textarea id="cap-c">默认 max_num_batched_tokens=2048 使长 prompt 分 4 块串行 prefill，TTFT 被拉长到 8s+。调至 8192 后 TTFT 降至 1.9s。注意：预算变化会使 aclgraph 捕获桶失效，需重新 warmup；文档问答类负载建议直接按 KA-006 的 8192–16384 档配置。</textarea></div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="btn pri" onclick="publishDraft()">发布为 DRAFT</button>
+          <span style="font-size:11.5px;color:var(--ink3)">发布后立即可被搜索，标注「尚未验证」</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function publishDraft(){
+  const id="KA-0"+seq; seq++;
+  ASSETS.unshift({
+    id, tier:"note", type:"feature", status:"DRAFT",
+    title:$("#cap-q").value.trim()||"未命名工作记录",
+    summary:$("#cap-c").value.trim().slice(0,140),
+    tags:["ttft","调度","调参","qwen3","continuous-batching"],
+    models:["Qwen3-30B-A3B"], framework:"vllm-ascend", fwVersion:"v0.10.0rc1", env:"CANN 8.2.RC1 · Atlas 800I A2",
+    author:ME, created:TODAY, updated:TODAY, reuseCount:0,
+    statusReason:"AI 自动生成，作者已确认问题/环境/结论三项，尚无非作者复用。",
+    code:[{repo:"vllm-project/vllm",path:"vllm/v1/core/sched/scheduler.py",note:"token 预算调度"}],
+    issues:[],
+    body:[{h:"问题",p:esc($("#cap-q").value.trim())},{h:"环境",p:"vllm-ascend v0.10.0rc1 · CANN 8.2.RC1 · Qwen3-30B-A3B · Atlas 800I A2 · TP4"},{h:"结论",p:esc($("#cap-c").value.trim())}],
+    validations:[],reuses:[],history:[{ver:"v1",date:TODAY,by:ME,note:"AI 生成，作者确认三要素"}]
+  });
+  toast(`已发布 <b>${id}</b>（DRAFT · 尚未验证）。现在去搜索「TTFT」试试 —— 它已经能被找到了。`);
+  location.hash="#/asset/"+id;
+}
+
+/* ---------- REVIEW-DUE 复核队列 ---------- */
+function renderReview(){
+  const items=ASSETS.filter(a=>a.status==="REVIEW_DUE");
+  const order={"高":0,"中":1,"低":2};
+  items.sort((x,y)=>{const mx=REVIEW_META[x.id]||{},my=REVIEW_META[y.id]||{};return (order[mx.priority]??3)-(order[my.priority]??3);});
+  return `
+  <div class="pagehead"><h1>复核队列</h1><span class="sub">只列入「实际被使用 / 高风险 / 受代码或版本变化影响」的资产 —— DRAFT 躺着不动不会出现在这里</span></div>
+  ${items.length?items.map(a=>{
+    const m=REVIEW_META[a.id]||{};
+    return `<div class="rev-item">
+      <div class="rev-h">
+        <span class="rev-trigger">${esc(m.trigger||"待复核")}${m.priority?" · "+m.priority+"优先":""}</span>
+        <a href="#/asset/${a.id}" style="font-weight:600">${esc(a.title)}</a>
+        <span class="meta" style="margin-left:auto"><span>近 30 天复用 <b class="num">${m.usage30d??"—"}</b> 次</span><span class="sep"></span><span>${m.detectedAt||""} 检出</span></span>
+      </div>
+      <div class="rev-b">
+        <div style="font-size:12.5px;color:var(--ink2);margin-bottom:8px"><b>触发：</b>${esc(m.triggerDetail||a.statusReason)}</div>
+        ${m.aiSummary?`<div style="font-size:12.5px;line-height:1.75"><b>AI 变化摘要：</b>${esc(m.aiSummary)}</div>`:""}
+        ${(m.diff&&m.diff.length)?`<div style="margin-top:8px;border:1px solid var(--border);border-radius:5px;overflow-x:auto;padding:6px 4px;background:var(--surface2)">${m.diff.map(d=>`<div class="diffline ${d.t}">${esc(d.s)}</div>`).join("")}</div>`:""}
+        ${m.draft?`<details class="draftbox"><summary>AI 更新草稿（接受后生成新版本，状态回到 DRAFT，不会自动 VERIFIED）</summary><div class="inner">${esc(m.draft)}</div></details>`:""}
+        <div class="rev-actions">
+          <button class="btn ok sm" onclick="revAct('${a.id}','valid')">✓ 内容仍然有效</button>
+          <button class="btn sm" onclick="revAct('${a.id}','accept')">接受 AI 更新草稿</button>
+          <button class="btn bad sm" onclick="revAct('${a.id}','stale')">标记失效</button>
+          <button class="btn sm" onclick="revAct('${a.id}','arch')">已被替代 → 归档</button>
+        </div>
+      </div>
+    </div>`;
+  }).join(""):`<div class="empty">队列已清空。资产在关联代码 / 版本变化或收到「可能过时」反馈时会自动进入这里。</div>`}
+  <div class="footnote">轮值提示：本周复核轮值 —— ${ME}。处理动作都会写入资产的验证与版本记录，作为审计轨迹。</div>`;
+}
+function revAct(id,act){
+  const a=byId(id); const m=REVIEW_META[id]||{};
+  if(act==="valid"){
+    a.status="VERIFIED";
+    a.validations.unshift({by:ME,date:TODAY,note:"复核确认：针对「"+(m.trigger||"变更")+"」核对后内容仍然有效",result:"通过"});
+    a.statusReason="复核确认仍有效（"+TODAY+"，"+ME+"）。";
+    toast(`${id} 复核通过 → 恢复 VERIFIED，验证记录已留痕。`);
+  }else if(act==="accept"){
+    const ver="v"+(a.history.length+2);
+    a.history.unshift({ver,date:TODAY,by:ME+"（采纳 AI 草稿）",note:"按 AI 更新草稿修订："+(m.trigger||"")});
+    a.updated=TODAY; a.status="DRAFT";
+    a.statusReason="已按 AI 草稿更新为 "+ver+"，等待非作者复用后可重新升级 VERIFIED。";
+    a.body.unshift({h:"【"+TODAY+" 更新 · 待验证】",p:esc(m.draft||"按 AI 草稿更新。")});
+    toast(`${id} 已生成新版本 ${ver}（DRAFT · 尚未验证）。AI 草稿不会被自动标记为 VERIFIED。`);
+  }else if(act==="stale"){
+    a.status="STALE";
+    a.statusReason="复核确认失效（"+TODAY+"，"+ME+"）：" + (m.triggerDetail||"内容不再适用。");
+    a.validations.unshift({by:ME,date:TODAY,note:"复核确认失效",result:"失效确认"});
+    toast(`${id} 已标记 STALE，退出正常搜索，仅历史入口可见。`);
+  }else if(act==="arch"){
+    a.status="ARCHIVED";
+    a.statusReason="复核确认已被更新的资产替代（"+TODAY+"，"+ME+"）。";
+    toast(`${id} 已归档。`);
+  }
+  delete REVIEW_META[id];
+  route();
+}
+
+/* ---------- 数据看板 ---------- */
+function renderDash(){
+  const cnt=(t,s)=>ASSETS.filter(a=>a.type===t&&a.status===s).length;
+  const types=["model","chain","feature"], sts=["VERIFIED","DRAFT","REVIEW_DUE","STALE","ARCHIVED"];
+  const bars=(o)=>{const mx=Math.max(...o.vals);return `<div class="trend">${o.vals.map((v,i)=>`<div class="bar"><i style="height:${Math.round(v/mx*100)}%"></i><em>${o.months[i]}</em></div>`).join("")}</div>`;};
+  return `
+  <div class="pagehead"><h1>数据看板</h1><span class="sub">口径以复用事件为准，不用点击数冒充复用 · 统计区间：近 30 天（截至 ${TODAY}）</span></div>
+  <div class="dashgrid">
+    <div class="card">
+      <h4 style="margin:0 0 4px;font-size:12px;color:var(--ink3)">有效复用率</h4>
+      <div class="bigv">68<span class="u">%</span></div>
+      <div class="footnote">= 非作者成功复用事件 <b class="num">${DASH.reuseRate.num}</b> ÷ 适用知识需求事件 <b class="num">${DASH.reuseRate.den}</b>。需求事件 = 搜索会话 + 问答会话 + 记录的缺口；成功复用 = 点击「有用，完成任务」且复用者 ≠ 作者。</div>
+      ${bars(DASH.reuseRate)}
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 4px;font-size:12px;color:var(--ink3)">搜索成功率</h4>
+      <div class="bigv">76<span class="u">%</span></div>
+      <div class="footnote">有结果点击且未反馈「没有找到答案」的搜索会话占比。本月「没找到答案」共 <b class="num">${DASH.notFound30d}</b> 次，沉淀为 ${GAPS.length} 个缺口（${GAPS.filter(g=>g.claimed).length} 个已认领）。</div>
+      ${bars(DASH.searchOk)}
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 4px;font-size:12px;color:var(--ink3)">重复探索工时（估算）</h4>
+      <div class="bigv">31<span class="u">h</span></div>
+      <div class="footnote">= 重复出现的缺口 / 重复搜索主题次数 × 平均排查 3.5h。4 月基线 86h，环比持续下降；该指标为估算值，仅看趋势。</div>
+      ${bars(DASH.rework)}
+    </div>
+    <div class="card">
+      <h4 style="margin:0 0 4px;font-size:12px;color:var(--ink3)">当前库存与积压</h4>
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-top:6px">
+        <div><div class="bigv">${ASSETS.filter(a=>a.status==="VERIFIED").length}</div><div class="footnote">VERIFIED 资产</div></div>
+        <div><div class="bigv" style="color:var(--warn)">${ASSETS.filter(a=>a.status==="REVIEW_DUE").length}</div><div class="footnote">REVIEW-DUE 积压<br>（目标 ≤ 5，超限报警）</div></div>
+        <div><div class="bigv">${ASSETS.filter(a=>a.status==="DRAFT").length}</div><div class="footnote">DRAFT（允许长期存在）</div></div>
+        <div><div class="bigv">${GAPS.filter(g=>!g.claimed).length}</div><div class="footnote">未认领缺口</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="section-t">知识覆盖矩阵（方向 × 状态）</div>
+  <div class="tbl-wrap"><table class="tbl cov">
+    <tr><th>方向</th>${sts.map(s=>`<th>${s.replace("_","-")}</th>`).join("")}<th>非作者复用合计</th></tr>
+    ${types.map(t=>`<tr><td>${TYPE_ZH[t]}</td>${sts.map(s=>{const n=cnt(t,s);return `<td class="num ${n?"c1":"c0"}">${n||"·"}</td>`;}).join("")}
+    <td class="num">${ASSETS.filter(a=>a.type===t).reduce((s,a)=>s+a.reuseCount,0)}</td></tr>`).join("")}
+  </table></div>
+  <div class="footnote">覆盖解读：执行链路方向 VERIFIED 存量偏薄（新框架版本迭代快），结合缺口列表看，「SGLang × Ascend」「PD 分离」是当前最该补的两个空白。</div>
+  ${REUSE_LOG.length?`<div class="section-t">本会话新增复用事件（审计示例）</div>
+  <div class="tbl-wrap"><table class="tbl"><tr><th>时间</th><th>使用者</th><th>资产</th><th>版本</th><th>任务</th><th>来源搜索词</th></tr>
+  ${REUSE_LOG.map(r=>`<tr><td class="num">${r.date}</td><td>${esc(r.by)}</td><td class="mono">${r.asset}</td><td class="mono">${esc(r.ver)}</td><td>${esc(r.task)}</td><td>${esc(r.q||"—")}</td></tr>`).join("")}</table></div>`:""}`;
+}
+
+/* ================= 路由 ================= */
+const NAV=[
+  {h:"#/",ic:"⌕",t:"首页 · 搜索",match:p=>p===""||p==="search"},
+  {h:"#/ask",ic:"◈",t:"AI 问答",match:p=>p==="ask"},
+  {h:"#/capture",ic:"＋",t:"沉淀记录",match:p=>p==="capture"},
+  {h:"#/review",ic:"！",t:"复核队列",match:p=>p==="review",badge:()=>ASSETS.filter(a=>a.status==="REVIEW_DUE").length},
+  {h:"#/dash",ic:"▤",t:"数据看板",match:p=>p==="dash"}
+];
+function renderNav(page){
+  $("#nav").innerHTML=NAV.map(n=>{
+    const b=n.badge?n.badge():0;
+    return `<a href="${n.h}" class="${n.match(page)?"on":""}"><span class="ic">${n.ic}</span>${n.t}${b?`<span class="bdg">${b}</span>`:""}</a>`;
+  }).join("");
+}
+function route(){
+  const h=location.hash.replace(/^#\/?/,"");
+  const [pathPart,queryPart]=h.split("?");
+  const page=pathPart.split("/")[0];
+  const p=new URLSearchParams(queryPart||"");
+  let html="";
+  if(page==="search"){
+    searchState={q:p.get("q")||"",type:p.get("type")||"",model:p.get("model")||"",fw:p.get("fw")||"",status:p.get("status")||"",hist:p.get("hist")==="1"};
+    html=renderSearch(searchState);
+  }
+  else if(page==="ask") html=renderAsk();
+  else if(page==="asset") html=renderAsset(pathPart.split("/")[1]);
+  else if(page==="capture") html=renderCapture();
+  else if(page==="review") html=renderReview();
+  else if(page==="dash") html=renderDash();
+  else html=renderHome();
+  renderNav(page);
+  $("#main").innerHTML=html;
+  $("#main").scrollTop=0; window.scrollTo(0,0);
+}
+window.addEventListener("hashchange",route);
+route();
+</script>

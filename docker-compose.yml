@@ -1,0 +1,20 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: zhiyuan-db
+    environment:
+      POSTGRES_USER: zhiyuan
+      POSTGRES_PASSWORD: zhiyuan_dev
+      POSTGRES_DB: zhiyuan
+    ports:
+      - "5433:5432"
+    volumes:
+      - zhiyuan_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zhiyuan"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  zhiyuan_pgdata:
