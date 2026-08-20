@@ -40,6 +40,20 @@ ruff check app tests           # lint
 ## 当前状态与 TODO
 
 - models.py / state_machine.py / search.py 评分：已实现
-- 未接 Alembic（M1 第一件事：`alembic init` + autogenerate 首个迁移）
-- api/ 路由全部是签名 + TODO；召回（全文/向量）未接；ai.py 是占位
-- 种子数据：M1 时从 `../prototype/kms-prototype.html` 的 ASSETS 数组提取（18 条示例资产）
+- Alembic 已接：`alembic/` + 首个迁移 `562da9d71450`。连接串只有一个来源
+  （`ZY_DATABASE_URL` → `settings.database_url` → env.py 注入），`alembic.ini` 的
+  `sqlalchemy.url` 留空且必须保持纯 ASCII —— configparser 用系统 locale 解码，中文会崩。
+- 已实现：`POST /assets`、`GET /assets/{id}`、`GET /assets/{id}/transitions`、
+  `POST /feedback/useful`；`main.py` 统一错误形状 `{error:{code,message}}`
+- 仍是骨架：search/ask（M2/M5）、feedback 的 stale·not-found（M3）、review/gaps/dashboard/hooks、ai.py
+- 种子数据：`scripts/seed.py` 从 `../prototype/kms-prototype.html` 提取 18 条资产
+- 测试：`pytest` 39 passed，全部走 sqlite 内存库
+
+### 写代码前值得知道的坑
+
+- **sqlite 不校验 VARCHAR 长度**，超长字段只有在 PG 上才炸。请求 schema 必须显式写
+  `max_length`，对齐 models.py 的列宽。
+- **sqlite 不存时区**：同一份数据 POST 响应（内存里带 tzinfo）与 GET 响应（读回来的裸值）
+  序列化结果差一个 `Z`。PG 的 timestamptz 会原样往返。测试里比较时间串要注意。
+- `updated_at` 带 `onupdate`：只有显式赋值才不会被刷成当前时间（种子回填历史时间靠这点）。
+- `transition()` / `create_as_draft()` 的 `at` 参数只给种子回填用，线上路径一律省略。
