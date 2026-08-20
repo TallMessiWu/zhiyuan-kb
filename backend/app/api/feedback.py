@@ -1,21 +1,95 @@
+"""三键反馈。M1 只提前落地「有用，完成任务」这一键，用来跑通 DRAFT→VERIFIED 的最小闭环；
+stale / not-found 仍留在 M3。
+"""
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, Header
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
-from ..schemas import NotFoundIn, StaleIn, UsefulIn
+from ..models import (
+    AssetFramework,
+    KnowledgeAsset,
+    ReuseEvent,
+    Status,
+    Trigger,
+    UserFeedback,
+    ValidationRecord,
+)
+from ..schemas import NotFoundIn, StaleIn, UsefulIn, UsefulOut
+from ..services import state_machine
+from .assets import load_asset
 
 router = APIRouter()
 
 
-@router.post("/feedback/useful")
+def _fw_version_at_use(db: Session, asset: KnowledgeAsset) -> str:
+    """复用时的框架版本，自动带出（低负担：不让用户填）。"""
+    af = db.scalar(select(AssetFramework).where(AssetFramework.asset_id == asset.id).order_by(AssetFramework.id))
+    return af.verified_on if af else ""
+
+
+@router.post("/feedback/useful", response_model=UsefulOut)
 def useful(body: UsefulIn, db: Session = Depends(get_db), x_user: str = Header(default="anonymous")):
-    """「有用，完成任务」。TODO(M3)：
-    建 ReuseEvent(outcome=success, fw_version_at_use 自动带出) + UserFeedback(useful)；
-    asset.reuse_count += 1；
-    若 asset.status==DRAFT 且 x_user != author -> state_machine.transition(
-        VERIFIED, nonauthor_reuse, evidence=reuse_event) + ValidationRecord(reuse_success)。
+    """「有用，完成任务」：记一次成功复用；非作者的这条证据可把 DRAFT 升为 VERIFIED。
+
+    作者本人点也照常记复用事件（复用次数是真实的），但不作为升级证据 —— 校验在状态机里。
     """
-    raise NotImplementedError("M3")
+    asset = load_asset(db, body.asset_id)
+    task_note = body.task_note.strip()
+
+    reuse = ReuseEvent(
+        asset_id=asset.id,
+        version_id=asset.current_version_id,
+        user_id=x_user,
+        task_note=task_note,
+        outcome="success",
+        search_event_id=body.search_event_id,
+        fw_version_at_use=_fw_version_at_use(db, asset),
+    )
+    db.add(reuse)
+    db.add(UserFeedback(
+        user_id=x_user, asset_id=asset.id, search_event_id=body.search_event_id,
+        kind="useful", note=task_note,
+    ))
+    db.flush()
+
+    asset.reuse_count += 1
+
+    promoted = False
+    note = ""
+    if asset.status == Status.DRAFT:
+        if x_user == asset.author_id:
+            note = "你是作者本人，本次复用不作为升级 VERIFIED 的证据。"
+        else:
+            # 非作者成功复用 —— 唯一能产出 VERIFIED 的两类证据之一（design.md §4）
+            validation = ValidationRecord(
+                asset_id=asset.id,
+                version_id=asset.current_version_id,
+                validator_id=x_user,
+                kind="reuse_success",
+                result="pass",
+                note=f"非作者复用成功：{task_note}" if task_note else "非作者复用成功（未填写任务说明）",
+            )
+            db.add(validation)
+            db.flush()
+            state_machine.transition(
+                db, asset, Status.VERIFIED, Trigger.nonauthor_reuse,
+                actor=x_user, evidence_type="reuse_event", evidence_id=reuse.id,
+                note=f"由非作者（{x_user}）成功复用，自动升级为 VERIFIED。",
+            )
+            promoted = True
+
+    db.commit()
+    return UsefulOut(
+        reuse_event_id=reuse.id,
+        asset_id=asset.id,
+        status=asset.status,
+        reuse_count=asset.reuse_count,
+        promoted=promoted,
+        note=note,
+    )
 
 
 @router.post("/feedback/stale")

@@ -7,6 +7,8 @@
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy.orm import Session
 
 from ..models import KnowledgeAsset, Status, StatusTransition, Trigger
@@ -44,8 +46,13 @@ def transition(
     evidence_type: str = "",
     evidence_id: int | None = None,
     note: str = "",
+    at: datetime | None = None,
 ) -> StatusTransition:
-    """执行一次状态流转：校验合法性 → 更新当前态 → 追加审计流水。"""
+    """执行一次状态流转：校验合法性 → 更新当前态 → 追加审计流水。
+
+    at 只给种子/回填历史用（补录既往流水的真实发生时间）；线上路径一律省略，走默认 utcnow。
+    它只影响新流水行的时间戳，不改变任何合法性规则。
+    """
     frm = asset.status
     if to == Status.VERIFIED and trigger in _FORBIDDEN_TO_VERIFIED:
         raise InvalidTransition(f"trigger {trigger.value} 不允许产出 VERIFIED")
@@ -64,18 +71,30 @@ def transition(
     row = StatusTransition(
         asset_id=asset.id, from_status=frm, to_status=to, trigger=trigger,
         evidence_type=evidence_type, evidence_id=evidence_id, actor=actor, note=note,
+        **({"at": at} if at else {}),
     )
     db.add(row)
     db.flush()
     return row
 
 
-def create_as_draft(db: Session, asset: KnowledgeAsset, *, actor: str, note: str = "") -> StatusTransition:
-    """新资产入库：状态置 DRAFT 并记录首条流水。"""
+def create_as_draft(
+    db: Session,
+    asset: KnowledgeAsset,
+    *,
+    actor: str,
+    note: str = "",
+    evidence_type: str = "",
+    evidence_id: int | None = None,
+    at: datetime | None = None,
+) -> StatusTransition:
+    """新资产入库：状态置 DRAFT 并记录首条流水。证据是首个 AssetVersion（见 design.md §4）。"""
     asset.status = Status.DRAFT
     row = StatusTransition(
         asset_id=asset.id, from_status=None, to_status=Status.DRAFT,
         trigger=Trigger.auto_create, actor=actor, note=note or "发布为 DRAFT",
+        evidence_type=evidence_type, evidence_id=evidence_id,
+        **({"at": at} if at else {}),
     )
     db.add(row)
     db.flush()
