@@ -126,3 +126,17 @@ def test_oversized_fields_rejected_with_422(client):
     resp = client.post("/api/v1/assets", json={**SAMPLE, "env_note": "x" * 201},
                        headers={"X-User": "wanglei"})
     assert resp.status_code == 422
+
+
+def test_invalid_code_ref_kind_rejected_with_422(client):
+    """kind 是枚举而不是裸字符串，否则非法值要等到建 CodeReference 时才炸成 500。"""
+    resp = client.post("/api/v1/assets", json={**SAMPLE, "code_refs": [{"kind": "not_a_kind"}]},
+                       headers={"X-User": "wanglei"})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_oversized_x_user_rejected_with_422(client):
+    """X-User 会落到 String(64) 列上；请求头也要挡长度，不能只挡请求体。"""
+    resp = client.post("/api/v1/assets", json=SAMPLE, headers={"X-User": "u" * 65})
+    assert resp.status_code == 422

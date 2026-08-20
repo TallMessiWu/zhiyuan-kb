@@ -12,7 +12,8 @@ from .models import Direction, RefKind, Status, Tier, Trigger, VersionOrigin
 # 所以必须在入口挡住，否则超长输入在测试里静默通过、上了 PG 才 500。
 
 class CodeRefIn(BaseModel):
-    kind: str = "repo_path"
+    # 用枚举而不是裸 str：否则非法 kind 要等到 RefKind(...) 抛 ValueError，变成 500 而不是 422
+    kind: RefKind = RefKind.repo_path
     repo: str = Field(default="", max_length=200)
     path_or_key: str = Field(default="", max_length=400)
     ref_id: str = Field(default="", max_length=100)

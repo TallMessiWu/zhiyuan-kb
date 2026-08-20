@@ -19,7 +19,6 @@ from ..models import (
     Framework,
     KnowledgeAsset,
     Model,
-    RefKind,
     ReuseEvent,
     StatusTransition,
     Tier,
@@ -42,6 +41,9 @@ from ..services import state_machine
 router = APIRouter()
 
 SUMMARY_MAX = 140
+# X-User 会落到 author_id / actor / validator_id / user_id 这些 String(64) 列上。
+# sqlite 不校验 VARCHAR 长度，超长值只有在 PG 上才炸，所以在请求头入口就挡住。
+USER_ID_MAX = 64
 # 版本区间只按连接号切（v0.9.1–v0.9.2 / v0.9.1~v0.9.2）；不切 ASCII 连字符，
 # 否则 v0.4.2-patch 这类带后缀的版本会被错切成区间。
 _RANGE_SEP = re.compile(r"\s*[–—~]\s*")
@@ -159,7 +161,7 @@ def load_asset(db: Session, asset_id: int) -> KnowledgeAsset:
 
 
 @router.post("/assets", status_code=201, response_model=AssetDetail)
-def create_asset(body: AssetCreate, db: Session = Depends(get_db), x_user: str = Header(default="anonymous")):
+def create_asset(body: AssetCreate, db: Session = Depends(get_db), x_user: str = Header(default="anonymous", max_length=USER_ID_MAX)):
     """发布 DRAFT（沉淀页）：资产 + 首个版本 + 模型/框架/代码引用关联，状态经状态机置 DRAFT。
 
     TODO(M2)：异步生成 summary/tags/embedding，替换这里的规则式摘要。
@@ -203,7 +205,7 @@ def create_asset(body: AssetCreate, db: Session = Depends(get_db), x_user: str =
         db.add(AssetModel(asset_id=asset.id, model_id=_get_or_create_model(db, name).id))
     for ref in body.code_refs:
         db.add(CodeReference(
-            asset_id=asset.id, kind=RefKind(ref.kind), repo=ref.repo,
+            asset_id=asset.id, kind=ref.kind, repo=ref.repo,
             path_or_key=ref.path_or_key, ref_id=ref.ref_id, note=ref.note, watch=ref.watch,
         ))
 

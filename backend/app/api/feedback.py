@@ -4,7 +4,7 @@ stale / not-found 仍留在 M3。
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Header
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -19,7 +19,7 @@ from ..models import (
 )
 from ..schemas import NotFoundIn, StaleIn, UsefulIn, UsefulOut
 from ..services import state_machine
-from .assets import load_asset
+from .assets import USER_ID_MAX, load_asset
 
 router = APIRouter()
 
@@ -31,7 +31,8 @@ def _fw_version_at_use(db: Session, asset: KnowledgeAsset) -> str:
 
 
 @router.post("/feedback/useful", response_model=UsefulOut)
-def useful(body: UsefulIn, db: Session = Depends(get_db), x_user: str = Header(default="anonymous")):
+def useful(body: UsefulIn, db: Session = Depends(get_db),
+           x_user: str = Header(default="anonymous", max_length=USER_ID_MAX)):
     """「有用，完成任务」：记一次成功复用；非作者的这条证据可把 DRAFT 升为 VERIFIED。
 
     作者本人点也照常记复用事件（复用次数是真实的），但不作为升级证据 —— 校验在状态机里。
@@ -55,7 +56,14 @@ def useful(body: UsefulIn, db: Session = Depends(get_db), x_user: str = Header(d
     ))
     db.flush()
 
-    asset.reuse_count += 1
+    # 原子自增：asset.reuse_count += 1 是读改写，两个并发的「有用」会互相覆盖，
+    # 让这个冗余计数和 ReuseEvent 事件表长期对不上。
+    db.execute(
+        update(KnowledgeAsset)
+        .where(KnowledgeAsset.id == asset.id)
+        .values(reuse_count=KnowledgeAsset.reuse_count + 1)
+    )
+    db.refresh(asset)
 
     promoted = False
     note = ""

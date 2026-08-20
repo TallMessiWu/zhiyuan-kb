@@ -4,7 +4,7 @@
 """
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -17,6 +17,13 @@ def session_factory():
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
+
+    # sqlite 默认 PRAGMA foreign_keys=OFF，会把「删除/插入顺序违反外键」这类问题一路放行到 PG 才爆。
+    # 测试里强制打开，让本地就能逼近 PostgreSQL 的约束行为。
+    @event.listens_for(engine, "connect")
+    def _enforce_fk(dbapi_conn, _record):
+        dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
     Base.metadata.create_all(engine)
     yield sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
     engine.dispose()

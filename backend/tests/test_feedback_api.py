@@ -93,3 +93,19 @@ def test_useful_without_task_note_is_allowed(client, db):
     assert out["promoted"] is True
     validation = db.query(ValidationRecord).filter_by(asset_id=asset_id).one()
     assert "未填写任务说明" in validation.note
+
+
+def test_reuse_count_increment_is_atomic(client, db):
+    """自增走 UPDATE ... SET reuse_count = reuse_count + 1，不是读改写。"""
+    asset_id = publish(client, user="chenyuwei")["id"]
+    for user in ("wanglei", "lihao", "sunxiaodong"):
+        _useful(client, asset_id, user=user)
+    assert db.get(KnowledgeAsset, asset_id).reuse_count == 3
+    assert db.query(ReuseEvent).filter_by(asset_id=asset_id).count() == 3
+
+
+def test_oversized_x_user_rejected_with_422(client):
+    asset_id = publish(client, user="chenyuwei")["id"]
+    resp = client.post("/api/v1/feedback/useful", json={"asset_id": asset_id},
+                       headers={"X-User": "u" * 65})
+    assert resp.status_code == 422

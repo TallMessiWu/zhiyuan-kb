@@ -17,7 +17,14 @@ from app.models import (
     Trigger,
     ValidationRecord,
 )
-from scripts.seed import check_consistency, js_to_json, load_prototype, seed_asset, to_markdown
+from scripts.seed import (
+    _clear,
+    check_consistency,
+    js_to_json,
+    load_prototype,
+    seed_asset,
+    to_markdown,
+)
 
 EXPECTED_BY_STATUS = {
     Status.VERIFIED: 8,
@@ -168,3 +175,15 @@ def test_validation_records_are_attached(seeded):
     assert total == 15
     stale = seeded.scalars(select(ValidationRecord).where(ValidationRecord.result == "stale_confirm")).all()
     assert len(stale) == 1 and stale[0].asset_id == 8
+
+
+def test_reset_clears_everything_under_foreign_key_enforcement(seeded):
+    """--reset 的删除顺序必须扛得住外键强制（conftest 已开 PRAGMA foreign_keys=ON）。
+
+    knowledge_asset 与 asset_version 互相引用，顺序错了在 PostgreSQL 上就是 ForeignKeyViolation。
+    """
+    _clear(seeded)
+    assert seeded.scalars(select(KnowledgeAsset)).all() == []
+    assert seeded.scalars(select(AssetVersion)).all() == []
+    assert seeded.scalars(select(StatusTransition)).all() == []
+    assert seeded.scalars(select(ReviewTask)).all() == []

@@ -24,7 +24,7 @@ import re
 import sys
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select, text
+from sqlalchemy import delete, select, text, update
 from sqlalchemy.orm import Session
 
 from app.db import Base, get_engine, get_sessionmaker
@@ -166,12 +166,18 @@ def split_issue_ref(ref: str) -> tuple[str, str]:
 # ---------- 导入 ----------
 
 def _clear(db: Session) -> None:
-    """按依赖顺序清空业务表（只在 --reset 时用）。"""
+    """按依赖顺序清空业务表（只在 --reset 时用）。
+
+    knowledge_asset 与 asset_version 互相引用，必须先把 current_version_id 置空拆掉环，
+    否则先删哪一张都会撞外键。sqlite 默认不强制外键会掩盖这一点，PostgreSQL 上直接报错。
+    """
     for table in (StatusTransition, ReviewTask, ValidationRecord, ReuseEvent, UserFeedback,
                   CodeReference, AssetFramework, AssetModel):
         db.execute(delete(table))
-    db.execute(delete(KnowledgeAsset).where(KnowledgeAsset.id.isnot(None)))
-    for table in (AssetVersion, Framework, Model):
+    db.execute(update(KnowledgeAsset).values(current_version_id=None))
+    db.execute(delete(AssetVersion))
+    db.execute(delete(KnowledgeAsset))
+    for table in (Framework, Model):
         db.execute(delete(table))
     db.commit()
 
@@ -451,9 +457,10 @@ def main() -> int:
         assets, review_meta = load_prototype()
         for raw in assets:
             seed_asset(db, raw, review_meta)
-        db.commit()
 
+        # 自检必须在 commit 之前：不变量不成立就整批回滚，不能把违规数据留在库里
         check_consistency(db)
+        db.commit()
         sync_pk_sequence(db)
 
         by_status: dict[str, int] = {}
