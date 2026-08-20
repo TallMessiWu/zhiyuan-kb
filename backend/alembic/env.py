@@ -9,9 +9,9 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+from app import models  # noqa: F401  —— 导入以注册全部 11 实体到 Base.metadata
 from app.config import settings
 from app.db import Base
-from app import models  # noqa: F401  —— 导入以注册全部 11 实体到 Base.metadata
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

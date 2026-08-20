@@ -11,6 +11,7 @@ def test_publish_creates_draft_with_version_and_audit(client, db):
     assert detail["status"] == "DRAFT"
     assert detail["tier"] == "note"            # 发布一律是工作记录
     assert detail["author_id"] == "wanglei"
+    assert "尚无非作者复用" in detail["status_reason"]   # 详情页右栏「状态原因」不能是空的
     assert detail["code"] == f"KA-{detail['id']:03d}"
 
     # 首个版本：seq=1、created_from=author、正文原样落库

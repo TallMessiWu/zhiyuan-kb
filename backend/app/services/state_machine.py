@@ -90,6 +90,8 @@ def create_as_draft(
 ) -> StatusTransition:
     """新资产入库：状态置 DRAFT 并记录首条流水。证据是首个 AssetVersion（见 design.md §4）。"""
     asset.status = Status.DRAFT
+    if note:
+        asset.status_reason = note      # 与 transition() 一致：note 同时是当前态的展示理由
     row = StatusTransition(
         asset_id=asset.id, from_status=None, to_status=Status.DRAFT,
         trigger=Trigger.auto_create, actor=actor, note=note or "发布为 DRAFT",

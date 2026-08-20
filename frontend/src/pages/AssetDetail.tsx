@@ -9,6 +9,7 @@ import {
   TIER_ZH,
   VALIDATION_RESULT_ZH,
   type AssetDetail as Asset,
+  type CodeRefOut,
   type FrameworkOut,
   type UsefulOut,
 } from "../types";
@@ -22,6 +23,12 @@ function fwLabel(f: FrameworkOut): string {
   const range = [f.version_min, f.version_max].filter(Boolean).join("–");
   const ver = f.verified_on || range;
   return ver ? `${f.name} ${ver}` : f.name;
+}
+
+/** Issue/PR 编号：库里 repo 与 ref_id 分开存，展示时拼回原型的 vllm-ascend#1523 形态 */
+function issueLabel(c: CodeRefOut): string {
+  if (c.repo && c.ref_id) return `${c.repo}#${c.ref_id}`;
+  return c.ref_id || c.repo || c.path_or_key;
 }
 
 type LoadState = "loading" | "ready" | "notfound" | "error";
@@ -325,7 +332,7 @@ export default function AssetDetail() {
               {issueRefs.map((c) => (
                 <div className="row" key={c.id}>
                   <span className="mono" style={{ fontSize: 11 }}>
-                    {c.ref_id || c.path_or_key}
+                    {issueLabel(c)}
                   </span>{" "}
                   {c.note}
                 </div>
