@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
-from .models import Direction, Status, Tier
+from .models import Direction, RefKind, Status, Tier, Trigger, VersionOrigin
 
 
 class CodeRefIn(BaseModel):
@@ -57,6 +57,108 @@ class AssetBrief(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @computed_field  # 展示用编号，与原型一致（id=16 → KA-016）；库内主键仍是 int
+    @property
+    def code(self) -> str:
+        return f"KA-{self.id:03d}"
+
+
+# ---------- 详情页（GET /assets/{id}） ----------
+
+class VersionBrief(BaseModel):
+    """版本历史条目（不含正文）。"""
+
+    id: int
+    seq: int
+    change_note: str
+    created_by: str
+    created_from: VersionOrigin
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class VersionOut(VersionBrief):
+    body_md: str
+
+
+class FrameworkOut(BaseModel):
+    name: str
+    repo_url: str = ""
+    version_min: str = ""
+    version_max: str = ""
+    verified_on: str = ""
+
+
+class CodeRefOut(BaseModel):
+    id: int
+    kind: RefKind
+    repo: str
+    path_or_key: str
+    ref_id: str
+    note: str
+    watch: bool
+
+    model_config = {"from_attributes": True}
+
+
+class ValidationOut(BaseModel):
+    id: int
+    version_id: int | None
+    validator_id: str
+    kind: str    # reuse_success / manual_review / review_confirm
+    result: str  # pass / fail / stale_confirm
+    note: str
+    at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ReuseOut(BaseModel):
+    id: int
+    version_id: int | None
+    user_id: str
+    task_note: str
+    outcome: str
+    fw_version_at_use: str
+    at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TransitionOut(BaseModel):
+    """状态流转审计流水条目（GET /assets/{id}/transitions）。"""
+
+    id: int
+    asset_id: int
+    from_status: Status | None
+    to_status: Status
+    trigger: Trigger
+    evidence_type: str
+    evidence_id: int | None
+    actor: str
+    note: str
+    at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AssetDetail(AssetBrief):
+    """详情：资产 + 当前版本 + 验证/复用记录 + 代码引用 + 版本历史（docs/api-contract.md）。"""
+
+    source: str
+    source_ref: str
+    env_note: str
+    status_reason: str
+    created_at: datetime
+    models: list[str] = []
+    frameworks: list[FrameworkOut] = []
+    current_version: VersionOut | None = None
+    versions: list[VersionBrief] = []
+    code_refs: list[CodeRefOut] = []
+    validations: list[ValidationOut] = []
+    reuses: list[ReuseOut] = []
+
 
 class SearchItem(BaseModel):
     asset: AssetBrief
@@ -73,6 +175,17 @@ class UsefulIn(BaseModel):
     asset_id: int
     task_note: str = ""
     search_event_id: int | None = None
+
+
+class UsefulOut(BaseModel):
+    """三键反馈「有用」的结果。promoted=True 表示本次证据把 DRAFT 升成了 VERIFIED。"""
+
+    reuse_event_id: int
+    asset_id: int
+    status: Status
+    reuse_count: int
+    promoted: bool = False
+    note: str = ""
 
 
 class StaleIn(BaseModel):

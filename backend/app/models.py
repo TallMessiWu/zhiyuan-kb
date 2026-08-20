@@ -43,6 +43,9 @@ class Status(str, enum.Enum):
     ARCHIVED = "ARCHIVED"
 
 
+# 注意 name="transition_trigger"：PostgreSQL 的 pg_catalog 里有内置伪类型 trigger，
+# 且 pg_catalog 隐式排在 search_path 最前，枚举若叫 trigger 会被伪类型遮蔽，
+# 建表时报 column "trigger" has pseudo-type trigger。
 class Trigger(str, enum.Enum):
     auto_create = "auto_create"
     nonauthor_reuse = "nonauthor_reuse"
@@ -82,10 +85,18 @@ class KnowledgeAsset(Base):
     summary: Mapped[str] = mapped_column(Text, default="")
     tags: Mapped[list] = mapped_column(JSON, default=list)
     author_id: Mapped[str] = mapped_column(String(64), index=True)
-    current_version_id: Mapped[int | None] = mapped_column(ForeignKey("asset_version.id"), nullable=True)
+    # 与 AssetVersion.asset_id 构成环形外键：use_alter 让建表期先建两张表、再 ALTER 加约束，
+    # 否则 PostgreSQL 会在 CREATE TABLE 阶段因前向引用失败（SQLite 不较真，会掩盖这个问题）。
+    current_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("asset_version.id", use_alter=True, name="fk_knowledge_asset_current_version"),
+        nullable=True,
+    )
     # 来源：ai_session / issue / pr / wiki / manual + 引用标识
     source: Mapped[str] = mapped_column(String(32), default="manual")
     source_ref: Mapped[str] = mapped_column(String(300), default="")
+    # 适用环境的依赖描述（如 "CANN 8.2.RC1 · torch_npu 2.5.1.post1"），详情页右栏「依赖」行。
+    # 框架/版本区间在 AssetFramework，模型在 AssetModel；此列只承载不便结构化的依赖串。
+    env_note: Mapped[str] = mapped_column(String(200), default="")
     status_reason: Mapped[str] = mapped_column(Text, default="")
     reuse_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -124,7 +135,7 @@ class StatusTransition(Base):
     asset_id: Mapped[int] = mapped_column(ForeignKey("knowledge_asset.id"), index=True)
     from_status: Mapped[Status | None] = mapped_column(Enum(Status), nullable=True)
     to_status: Mapped[Status] = mapped_column(Enum(Status))
-    trigger: Mapped[Trigger] = mapped_column(Enum(Trigger))
+    trigger: Mapped[Trigger] = mapped_column(Enum(Trigger, name="transition_trigger"))
     evidence_type: Mapped[str] = mapped_column(String(40), default="")   # reuse_event / user_feedback / review_task / validation
     evidence_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     actor: Mapped[str] = mapped_column(String(64), default="system")     # system 或 user_id
@@ -274,7 +285,7 @@ class ReviewTask(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     asset_id: Mapped[int] = mapped_column(ForeignKey("knowledge_asset.id"), index=True)
-    trigger: Mapped[Trigger] = mapped_column(Enum(Trigger))
+    trigger: Mapped[Trigger] = mapped_column(Enum(Trigger, name="transition_trigger"))
     trigger_detail: Mapped[str] = mapped_column(Text, default="")
     diff_ref: Mapped[str] = mapped_column(String(400), default="")
     ai_impact_summary: Mapped[str] = mapped_column(Text, default="")
