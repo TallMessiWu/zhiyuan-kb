@@ -12,6 +12,7 @@ venv/
 node_modules/
 dist/
 *.local
+*.tsbuildinfo
 
 # env & tools
 .env

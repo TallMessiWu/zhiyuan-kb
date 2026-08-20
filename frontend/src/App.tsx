@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Search from "./pages/Search";
 import Ask from "./pages/Ask";
@@ -6,31 +6,54 @@ import AssetDetail from "./pages/AssetDetail";
 import Capture from "./pages/Capture";
 import Review from "./pages/Review";
 import Dashboard from "./pages/Dashboard";
+import { CURRENT_USER } from "./api/client";
 
-// 布局与导航对照 prototype/kms-prototype.html：左侧窄导航 + 主内容区。
-// M1 时把原型的 CSS 变量（双主题 token）抽到 src/theme.css。
+// 布局与导航对照 prototype/kms-prototype.html 的 #app / #sidebar / nav.menu / .side-note。
+// 样式全部走 theme.css 的类，不再写内联样式。
+// 图标 ic 与文案照抄原型 NAV；「首页 · 搜索」在 /search 下同样高亮（原型 match 规则）。
+// 复核队列的角标（.bdg）等 M4 有真实计数后再挂。
 const NAV = [
-  { to: "/", label: "首页 · 搜索" },
-  { to: "/ask", label: "AI 问答" },
-  { to: "/capture", label: "沉淀记录" },
-  { to: "/review", label: "复核队列" },
-  { to: "/dashboard", label: "数据看板" },
+  { to: "/", ic: "⌕", label: "首页 · 搜索", end: true, also: (p: string) => p.startsWith("/search") },
+  { to: "/ask", ic: "◈", label: "AI 问答", end: false },
+  { to: "/capture", ic: "＋", label: "沉淀记录", end: false },
+  { to: "/review", ic: "！", label: "复核队列", end: false },
+  { to: "/dashboard", ic: "▤", label: "数据看板", end: false },
 ];
 
 export default function App() {
+  const { pathname } = useLocation();
+
   return (
-    <div style={{ display: "flex", minHeight: "100vh", fontFamily: "system-ui, sans-serif" }}>
-      <aside style={{ width: 198, borderRight: "1px solid #ddd", padding: 12 }}>
-        <div style={{ fontWeight: 700, marginBottom: 12 }}>知源</div>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+    <div id="app">
+      <aside id="sidebar">
+        <div className="brand">
+          <div className="t">
+            知<em>源</em>
+          </div>
+          <div className="s">INFERENCE KB · 内部</div>
+        </div>
+        <nav className="menu">
           {NAV.map((n) => (
-            <NavLink key={n.to} to={n.to}>
+            <NavLink
+              key={n.to}
+              to={n.to}
+              end={n.end}
+              className={({ isActive }) =>
+                isActive || n.also?.(pathname) ? "on" : ""
+              }
+            >
+              <span className="ic">{n.ic}</span>
               {n.label}
             </NavLink>
           ))}
         </nav>
+        <div className="side-note">
+          当前用户 <span className="u">王磊 {CURRENT_USER}</span>
+          <br />
+          方向：vLLM Ascend / SGLang
+        </div>
       </aside>
-      <main style={{ flex: 1, padding: 24 }}>
+      <main id="main">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/search" element={<Search />} />

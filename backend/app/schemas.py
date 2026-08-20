@@ -8,12 +8,15 @@ from pydantic import BaseModel, Field, computed_field
 from .models import Direction, RefKind, Status, Tier, Trigger, VersionOrigin
 
 
+# 长度上限对齐 models.py 的列宽：sqlite 不校验 VARCHAR 长度，只有 PG 会在插入时报错，
+# 所以必须在入口挡住，否则超长输入在测试里静默通过、上了 PG 才 500。
+
 class CodeRefIn(BaseModel):
     kind: str = "repo_path"
-    repo: str = ""
-    path_or_key: str = ""
-    ref_id: str = ""
-    note: str = ""
+    repo: str = Field(default="", max_length=200)
+    path_or_key: str = Field(default="", max_length=400)
+    ref_id: str = Field(default="", max_length=100)
+    note: str = Field(default="", max_length=300)
     watch: bool = True
 
 
@@ -24,12 +27,12 @@ class AssetCreate(BaseModel):
     direction: Direction
     body_md: str                      # 问题/环境/结论 三节 markdown
     models: list[str] = []
-    framework: str = "vllm-ascend"
-    fw_version: str = ""
-    env_note: str = ""
+    framework: str = Field(default="vllm-ascend", max_length=64)
+    fw_version: str = Field(default="", max_length=40)
+    env_note: str = Field(default="", max_length=200)
     tags: list[str] = []
-    source: str = "ai_session"
-    source_ref: str = ""
+    source: str = Field(default="ai_session", max_length=32)
+    source_ref: str = Field(default="", max_length=300)
     code_refs: list[CodeRefIn] = []
 
 
@@ -173,7 +176,7 @@ class SearchResponse(BaseModel):
 
 class UsefulIn(BaseModel):
     asset_id: int
-    task_note: str = ""
+    task_note: str = Field(default="", max_length=500)
     search_event_id: int | None = None
 
 
@@ -190,11 +193,11 @@ class UsefulOut(BaseModel):
 
 class StaleIn(BaseModel):
     asset_id: int
-    note: str = ""
+    note: str = Field(default="", max_length=500)
 
 
 class NotFoundIn(BaseModel):
-    query: str
+    query: str = Field(max_length=500)
     search_event_id: int | None = None
 
 

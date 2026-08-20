@@ -113,3 +113,15 @@ def test_split_version_range():
 def test_derive_summary_falls_back_without_conclusion_section():
     assert _derive_summary("## 问题\n\n只有问题一节\n") == "只有问题一节"
     assert _derive_summary("没有任何小节标题的裸正文") == "没有任何小节标题的裸正文"
+
+
+def test_oversized_fields_rejected_with_422(client):
+    """列宽在入口就挡住：sqlite 不校验 VARCHAR 长度，只有 PG 会在插入时炸。"""
+    resp = client.post("/api/v1/assets", json={**SAMPLE, "title": "长" * 301},
+                       headers={"X-User": "wanglei"})
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "VALIDATION_ERROR"
+
+    resp = client.post("/api/v1/assets", json={**SAMPLE, "env_note": "x" * 201},
+                       headers={"X-User": "wanglei"})
+    assert resp.status_code == 422

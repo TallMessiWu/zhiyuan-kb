@@ -114,7 +114,7 @@ def js_to_json(src: str) -> str:
             continue
         m = re.match(r"([A-Za-z_$][\w$]*)\s*:", src[i:])
         if m and last_significant in "{,[":              # 只有处于「键位置」才补引号
-            out.append('"%s":' % m.group(1))
+            out.append(f'"{m.group(1)}":')
             last_significant = ":"
             i += m.end()
             continue
