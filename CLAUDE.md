@@ -88,21 +88,30 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 
 每个 M 完成后：对照 `prototype/kms-prototype.html` 的对应页面做 UI 验收。
 
-## 不装 Docker 起 PostgreSQL（本机验证用）
+## 不装 Docker 起 PostgreSQL（`scripts/devdb.ps1`）
 
-PyPI 的 `pgserver` 自带 PostgreSQL 16 二进制，不需要管理员权限。注意它只有 cp39–cp312 的
-Windows wheel，所以用 uv 单独拉一个 3.12 venv **只用来跑服务端**，后端仍走自己的解释器连 TCP。
+没有 Docker 时的替代：PyPI 的 `pgserver` 自带 PostgreSQL 16 二进制，不需要管理员权限。
 
-```bash
-uv venv --python 3.12 pgvenv
-uv pip install --python pgvenv/Scripts/python.exe pgserver
-BIN=pgvenv/Lib/site-packages/pgserver/pginstall/bin
-
-"$BIN/initdb" -D pgdata -U zhiyuan --encoding=UTF8 --locale=C --auth=scram-sha-256 --pwfile=<(echo -n zhiyuan_dev)
-"$BIN/pg_ctl" -D pgdata -o "-p 5433 -c listen_addresses=localhost" -l pg.log start
-"$BIN/createdb" -h localhost -p 5433 -U zhiyuan zhiyuan   # PGPASSWORD=zhiyuan_dev
+```powershell
+powershell -File scripts/devdb.ps1 init     # 首次：建 venv + 数据目录 + 建库
+powershell -File scripts/devdb.ps1 start    # 启动
+powershell -File scripts/devdb.ps1 status   # 是否在跑 + 各状态资产条数
+powershell -File scripts/devdb.ps1 psql     # 交互式 psql
+powershell -File scripts/devdb.ps1 stop     # 停止
+powershell -File scripts/devdb.ps1 reset    # 删库重来
 ```
 
-账号/密码/端口与 `docker-compose.yml` 一致，`ZY_DATABASE_URL` 不用改。
+账号/密码/端口与 `docker-compose.yml` 一致（`zhiyuan` / `zhiyuan_dev` / 5433），
+正好是 `config.py` 的默认值，所以 `ZY_DATABASE_URL` 不用设。
+数据目录 `.pgdata/` 与 venv `.pgvenv/` 都在 `.gitignore` 里。
+
 **局限：这个 Windows 构建不带 pgvector 扩展**，M2 的向量召回还是得用 docker compose 的
 `pgvector/pgvector:pg16`，或另找带扩展的 PG。M1 用不到 pgvector。
+
+写这个脚本时踩到的三个 Windows 坑（改动别退回去）：
+1. `.ps1` 含中文必须存成 **UTF-8 with BOM** —— Windows PowerShell 5.1 没 BOM 就按系统 ANSI 码页读，直接语法报错。
+2. 启动 daemon 不能用 `Start-Process -Wait`（它等整个进程树，含不会退出的 postgres），
+   也不能让 daemon 继承调用方的控制台/管道（`&` 调用或 `-NoNewWindow` 都会），
+   否则调用方永远挂住。用 `-WindowStyle Hidden` 且不加 `-Wait`，就绪与否靠轮询 `pg_isready`。
+3. 传给 `psql.exe -c` 的 SQL 要保持纯 ASCII：命令行参数按系统 ANSI 码页编码，
+   中文（哪怕只是列别名）到服务端就是非法 UTF-8。同理，`curl` 发中文 JSON 请求体要用 `--data-binary @文件`。
