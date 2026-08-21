@@ -40,6 +40,7 @@ prototype/  单文件交互原型（内存数据，勿当作生产代码）
 ```bash
 # 数据库（postgres16 + pgvector，端口 5433）
 docker compose up -d db
+# 无 Docker 时的替代方案见下方「不装 Docker 起 PostgreSQL」
 
 # 后端（Python 3.11+）
 cd backend
@@ -62,9 +63,9 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
       `GET /assets/{id}/transitions`、`POST /feedback/useful`；`pytest` 39 passed
 - [x] frontend：theme.css（原型双主题 token）、详情页、沉淀页跑通真实接口
 - [x] 种子数据：`backend/scripts/seed.py` 导入原型 18 条资产（含验证/复用/代码引用/流水）
-- [ ] 迁移尚未在真实 PostgreSQL 上跑过（本机无 Docker）：目前证据是 SQLite 上 `upgrade head`
-      建表成功 + `alembic upgrade head --sql` 渲染出的 PG DDL 顺序与类型正确。
-      有 Docker 后请补跑一次，见下方命令。
+- [x] 迁移已在真实 PostgreSQL 16.2 上验证：`upgrade head` 建出 14 张表 + 6 个枚举类型，
+      环形外键 `fk_knowledge_asset_current_version` 存在，`status_transition.trigger` 解析到
+      `transition_trigger` 而非 `pg_catalog` 伪类型；种子与 `--reset` 均通过；全链路 curl 通过
 - [ ] 检索、问答、复核队列、看板仍是骨架（M2–M5）
 
 ### M1 期间发现并修掉的两个 PG 专属问题（改动别退回去）
@@ -76,8 +77,6 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 
 ## 下一步 Backlog（按序执行）
 
-- **M1 收尾（待 Docker）**：`docker compose up -d db` 后 `cd backend && alembic upgrade head`
-  与 `python scripts/seed.py`，确认真实 PG 建表与导入无误。
 - **M2 检索**：PG 全文（zhparser 或 jieba 预分词）+ pgvector(bge-m3) 双路召回，
   RRF 融合 + `services/search.py` 重排公式；`GET /search` 返回分项得分（排序可解释）。
   顺带把 `POST /assets` 里规则式的 summary 派生换成 AI 生成。
@@ -88,3 +87,22 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 - **M5 问答与看板**：RAG 问答（引用/无据明说/冲突并列，规则见 design.md §6）；看板 7 指标由事件表实时聚合。
 
 每个 M 完成后：对照 `prototype/kms-prototype.html` 的对应页面做 UI 验收。
+
+## 不装 Docker 起 PostgreSQL（本机验证用）
+
+PyPI 的 `pgserver` 自带 PostgreSQL 16 二进制，不需要管理员权限。注意它只有 cp39–cp312 的
+Windows wheel，所以用 uv 单独拉一个 3.12 venv **只用来跑服务端**，后端仍走自己的解释器连 TCP。
+
+```bash
+uv venv --python 3.12 pgvenv
+uv pip install --python pgvenv/Scripts/python.exe pgserver
+BIN=pgvenv/Lib/site-packages/pgserver/pginstall/bin
+
+"$BIN/initdb" -D pgdata -U zhiyuan --encoding=UTF8 --locale=C --auth=scram-sha-256 --pwfile=<(echo -n zhiyuan_dev)
+"$BIN/pg_ctl" -D pgdata -o "-p 5433 -c listen_addresses=localhost" -l pg.log start
+"$BIN/createdb" -h localhost -p 5433 -U zhiyuan zhiyuan   # PGPASSWORD=zhiyuan_dev
+```
+
+账号/密码/端口与 `docker-compose.yml` 一致，`ZY_DATABASE_URL` 不用改。
+**局限：这个 Windows 构建不带 pgvector 扩展**，M2 的向量召回还是得用 docker compose 的
+`pgvector/pgvector:pg16`，或另找带扩展的 PG。M1 用不到 pgvector。
