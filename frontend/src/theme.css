@@ -161,3 +161,37 @@ nav.menu a .bdg{margin-left:auto;background:var(--warn-bg);color:var(--warn);bor
 /* 原型里 chip 是静态 span；沉淀页的环境 chip 要可点击，用 button 并复位其默认排版 */
 button.chip{font-family:var(--sans);font-size:11.5px;line-height:1.65}
 button.chip.mono{font-family:var(--mono)}
+
+/* ---------- M2：搜索框 / 筛选栏 / 结果条 / 首页栅格（逐行照抄原型 134–165 行） ---------- */
+.searchrow{display:flex;gap:8px;margin:14px 0 10px}
+.searchrow input{flex:1;border:1px solid var(--border2);background:var(--surface);color:var(--ink);border-radius:6px;padding:10px 14px;font-size:14px;font-family:var(--sans)}
+.searchrow input::placeholder{color:var(--ink3)}
+.filterbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 4px;font-size:12px;color:var(--ink2)}
+.filterbar select{border:1px solid var(--border2);background:var(--surface);color:var(--ink);border-radius:5px;padding:3px 8px;font-size:12px;font-family:var(--sans)}
+.filterbar label.tog{display:inline-flex;gap:5px;align-items:center;cursor:pointer;color:var(--ink3)}
+.result{padding:13px 2px;border-bottom:1px solid var(--border)}
+.result h3{margin:0 0 3px;font-size:14.5px;font-weight:600;line-height:1.5}
+.result .sum{color:var(--ink2);font-size:12.8px;margin:3px 0 6px;line-height:1.65}
+.why{margin-top:6px}
+.why summary{font-size:11px;color:var(--ink3);cursor:pointer;user-select:none}
+.why summary:hover{color:var(--accent)}
+.why .parts{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.why .p{font-family:var(--mono);font-size:10.5px;border:1px solid var(--border);background:var(--surface2);border-radius:3px;padding:1px 7px;color:var(--ink2)}
+.why .p b{color:var(--ink);font-weight:500}
+.why .p.neg{color:var(--warn);border-color:var(--warn-line);background:var(--warn-bg)}
+.why .p.pos{color:var(--accent-ink);border-color:var(--accent-line);background:var(--accent-weak)}
+
+/* ---------- 首页 ---------- */
+.statstrip{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:7px;overflow:hidden;margin:18px 0 4px}
+.statstrip .st{background:var(--surface);padding:10px 14px}
+.statstrip .v{font-family:var(--mono);font-size:20px;font-weight:500;font-variant-numeric:tabular-nums}
+.statstrip .l{font-size:11px;color:var(--ink3);margin-top:1px}
+.home-cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media (max-width:1050px){.home-cols{grid-template-columns:1fr}}
+.mini-item{display:flex;gap:10px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.8px}
+.mini-item:last-child{border-bottom:none}
+.mini-item .n{color:var(--ink3);font-family:var(--mono);font-size:11px;flex:0 0 34px}
+.gap-item{padding:9px 0;border-bottom:1px solid var(--border)}
+.gap-item:last-child{border-bottom:none}
+.gap-item .q{font-size:12.8px;font-weight:500}
+.gap-item .m{font-size:11px;color:var(--ink3);margin-top:2px}

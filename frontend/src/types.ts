@@ -46,6 +46,9 @@ export const REUSE_OUTCOME_ZH: Record<ReuseOutcome, string> = {
   failed: "未成功",
 };
 
+/** 摘要来源：author 手写 / ai 网关生成 / rule 规则式兜底（硬规则 1：AI 产出必须可识别） */
+export type SummarySource = "author" | "ai" | "rule";
+
 export interface AssetBrief {
   id: number;
   code: string;
@@ -54,10 +57,15 @@ export interface AssetBrief {
   tier: Tier;
   status: Status;
   summary: string;
+  summary_source: SummarySource;
   tags: string[];
   author_id: string;
   reuse_count: number;
   updated_at: string;
+  /** 列表行 meta 用：后端已批量查好，前端不必为每条结果再拉详情 */
+  models: string[];
+  framework: string;
+  fw_version: string;
 }
 
 export interface ScorePart {
@@ -70,10 +78,24 @@ export interface SearchItem {
   score: { total: number; parts: ScorePart[] };
 }
 
+/** 这次搜索实际走了哪条召回路。降级（没 pgvector / 网关不可达）必须能看见，不能静默 */
+export interface RecallInfo {
+  /** pg_tsvector = PG 全文索引；portable = Python 加权词频兜底 */
+  keyword: "pg_tsvector" | "portable";
+  /** pgvector = ANN 索引；python = 内存余弦；off = 关闭；unavailable = 网关拿不到查询向量 */
+  vector: "pgvector" | "python" | "off" | "unavailable";
+  keyword_hits: number;
+  vector_hits: number;
+}
+
 export interface SearchResponse {
   items: SearchItem[];
   search_event_id: number;
   hist: boolean;
+  total: number;
+  /** 高亮词（后端已滤掉单字） */
+  terms: string[];
+  recall: RecallInfo;
 }
 
 export interface Citation {
@@ -218,4 +240,41 @@ export interface UsefulOut {
   promoted: boolean;
   /** promoted=false 时的说明，如「作者本人复用不作为升级证据」 */
   note: string;
+}
+
+/* ---------- 首页（GET /home）与缺口（GET /gaps） ---------- */
+
+export interface GapOut {
+  id: number;
+  code: string;
+  question: string;
+  hit_count: number;
+  first_at: string;
+  last_at: string;
+  reporters: string[];
+  status: "open" | "claimed" | "resolved";
+  claimed_by: string;
+}
+
+/** 首页「最近验证」：资产 + 这次验证的证据 */
+export interface RecentValidation {
+  asset: AssetBrief;
+  validator_id: string;
+  note: string;
+  at: string;
+}
+
+/** 首页数字条。有效复用率不在这里 —— 口径是看板指标（design.md §9），M5 才有 */
+export interface HomeStats {
+  total: number;
+  verified: number;
+  review_due: number;
+  open_gaps: number;
+}
+
+export interface HomeResponse {
+  stats: HomeStats;
+  recent_validated: RecentValidation[];
+  hot: AssetBrief[];
+  gaps: GapOut[];
 }
