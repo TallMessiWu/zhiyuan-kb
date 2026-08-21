@@ -8,8 +8,25 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.config import settings
 from app.db import Base, get_db
 from app.main import app
+from app.services import recall
+
+
+@pytest.fixture(autouse=True)
+def offline_gateway(monkeypatch):
+    """测试默认不碰 LLM 网关，也不走向量路。
+
+    两个原因：一是开发机上万一真有服务监听 9000，测试结果就会随环境漂移；
+    二是每次连接失败都要等一次 TCP 拒绝。需要验证 AI / 向量路径的用例自己
+    monkeypatch ai.summarize / ai.embed 并把开关打开（见 test_search_api.py）。
+    """
+    monkeypatch.setattr(settings, "ai_summary", "off")
+    monkeypatch.setattr(settings, "vector_search", "off")
+    recall.reset_capabilities_cache()
+    yield
+    recall.reset_capabilities_cache()
 
 
 @pytest.fixture()

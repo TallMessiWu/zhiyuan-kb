@@ -29,13 +29,16 @@ from sqlalchemy.orm import Session
 
 from app.db import Base, get_engine, get_sessionmaker
 from app.models import (
+    AssetEmbedding,
     AssetFramework,
     AssetModel,
+    AssetSearchDoc,
     AssetVersion,
     CodeReference,
     Direction,
     Framework,
     KnowledgeAsset,
+    KnowledgeGap,
     Model,
     RefKind,
     ReuseEvent,
@@ -48,7 +51,7 @@ from app.models import (
     ValidationRecord,
     VersionOrigin,
 )
-from app.services import state_machine
+from app.services import indexing, state_machine
 
 PROTOTYPE = pathlib.Path(__file__).resolve().parents[2] / "prototype" / "kms-prototype.html"
 
@@ -125,11 +128,12 @@ def js_to_json(src: str) -> str:
     return "".join(out)
 
 
-def load_prototype() -> tuple[list[dict], dict]:
+def load_prototype() -> tuple[list[dict], dict, list[dict]]:
     html = PROTOTYPE.read_text(encoding="utf-8")
     assets = json.loads(js_to_json(_extract_literal(html, "const ASSETS = ", "[", "]")))
     review_meta = json.loads(js_to_json(_extract_literal(html, "let REVIEW_META = ", "{", "}")))
-    return assets, review_meta
+    gaps = json.loads(js_to_json(_extract_literal(html, "let GAPS = ", "[", "]")))
+    return assets, review_meta, gaps
 
 
 # ---------- 小工具 ----------
@@ -172,7 +176,8 @@ def _clear(db: Session) -> None:
     否则先删哪一张都会撞外键。sqlite 默认不强制外键会掩盖这一点，PostgreSQL 上直接报错。
     """
     for table in (StatusTransition, ReviewTask, ValidationRecord, ReuseEvent, UserFeedback,
-                  CodeReference, AssetFramework, AssetModel):
+                  CodeReference, AssetFramework, AssetModel, AssetSearchDoc, AssetEmbedding,
+                  KnowledgeGap):
         db.execute(delete(table))
     db.execute(update(KnowledgeAsset).values(current_version_id=None))
     db.execute(delete(AssetVersion))
@@ -412,6 +417,25 @@ def seed_asset(db: Session, raw: dict, review_meta: dict) -> KnowledgeAsset:
     return asset
 
 
+def seed_gaps(db: Session, raws: list[dict]) -> int:
+    """导入原型的知识缺口。原型只记了最近一次被问的日期，first_at 只能取同一天 ——
+    真实的首次时间要等 M3 的 POST /feedback/not-found 自己累计。"""
+    for raw in raws:
+        last = dt(raw["last"])
+        db.add(KnowledgeGap(
+            id=int(raw["id"].split("-")[1]),
+            question=raw["q"],
+            hit_count=raw["hits"],
+            first_at=last,
+            last_at=last,
+            reporters=[uid(name) for name in raw["from"]],
+            status="claimed" if raw.get("claimed") else "open",
+            claimed_by=uid(raw.get("claimedBy", "")),
+        ))
+    db.flush()
+    return len(raws)
+
+
 def check_consistency(db: Session) -> None:
     """自检：DRAFT 资产不允许存在「非作者 + success」的复用事件（否则它早该是 VERIFIED）。"""
     rows = db.execute(
@@ -429,10 +453,11 @@ def sync_pk_sequence(db: Session) -> None:
     """种子写了显式主键；PostgreSQL 的序列要跟上，否则后续 POST /assets 会撞主键。"""
     if db.get_bind().dialect.name != "postgresql":
         return
-    db.execute(text(
-        "SELECT setval(pg_get_serial_sequence('knowledge_asset', 'id'), "
-        "COALESCE((SELECT MAX(id) FROM knowledge_asset), 1))"
-    ))
+    for table in ("knowledge_asset", "knowledge_gap"):
+        db.execute(text(
+            f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), "
+            f"COALESCE((SELECT MAX(id) FROM {table}), 1))"
+        ))
     db.commit()
 
 
@@ -441,6 +466,8 @@ def main() -> int:
     parser.add_argument("--reset", action="store_true", help="导入前清空业务表")
     parser.add_argument("--create-all", action="store_true",
                         help="直接按模型建表（本地快速起库用；正式路径是 alembic upgrade head）")
+    parser.add_argument("--no-embeddings", action="store_true",
+                        help="不回填向量（默认会试着调 embedding 网关；网关不可达时本来就自动跳过）")
     args = parser.parse_args()
 
     if args.create_all:
@@ -454,9 +481,13 @@ def main() -> int:
             print("库里已有资产，加 --reset 覆盖导入。", file=sys.stderr)
             return 1
 
-        assets, review_meta = load_prototype()
+        assets, review_meta, gaps = load_prototype()
         for raw in assets:
             seed_asset(db, raw, review_meta)
+        seed_gaps(db, gaps)
+
+        # 检索索引在同一个事务里建：种子数据落库却搜不到，等于没导
+        index_stats = indexing.reindex_all(db, with_embeddings=not args.no_embeddings)
 
         # 自检必须在 commit 之前：不变量不成立就整批回滚，不能把违规数据留在库里
         check_consistency(db)
@@ -472,7 +503,10 @@ def main() -> int:
               f"验证 {len(db.scalars(select(ValidationRecord.id)).all())} 条，"
               f"复用 {len(db.scalars(select(ReuseEvent.id)).all())} 条，"
               f"代码引用 {len(db.scalars(select(CodeReference.id)).all())} 条，"
-              f"复核任务 {len(db.scalars(select(ReviewTask.id)).all())} 条")
+              f"复核任务 {len(db.scalars(select(ReviewTask.id)).all())} 条，"
+              f"缺口 {len(db.scalars(select(KnowledgeGap.id)).all())} 条")
+        print(f"检索索引：分词文档 {index_stats['docs']} 条，向量 {index_stats['embeddings']} 条"
+              + ("" if index_stats["embeddings"] else "（embedding 网关不可用，向量召回将自动跳过）"))
         return 0
     finally:
         db.close()

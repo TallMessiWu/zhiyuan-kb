@@ -4,7 +4,9 @@
 - 状态历史在 StatusTransition（append-only），KnowledgeAsset.status 只是当前态冗余；
   两者必须经 services.state_machine.transition() 同事务写入。
 - 事件表（ReuseEvent / SearchEvent / UserFeedback / StatusTransition）只 INSERT。
-- 向量列（embedding）M2 时以独立 AssetEmbedding 表引入 pgvector，保持本文件可被 sqlite 测试加载。
+- 检索用的派生数据放在独立表（AssetSearchDoc / AssetEmbedding），主表不加列；
+  两张表都只用跨库通用的列类型，本文件才能继续被 sqlite 测试加载（PG 专属的
+  tsvector 生成列与 pgvector 列由迁移单独追加，ORM 不声明，见 services/recall.py）。
 """
 from __future__ import annotations
 
@@ -83,6 +85,9 @@ class KnowledgeAsset(Base):
     tier: Mapped[Tier] = mapped_column(Enum(Tier), default=Tier.note)
     status: Mapped[Status] = mapped_column(Enum(Status), default=Status.DRAFT, index=True)
     summary: Mapped[str] = mapped_column(Text, default="")
+    # 摘要来源：author 手写 / ai 网关生成 / rule 规则式兜底。硬规则 1 要求 AI 产出可识别，
+    # 详情页与沉淀页据此标注「AI 摘要」。
+    summary_source: Mapped[str] = mapped_column(String(16), default="rule")
     tags: Mapped[list] = mapped_column(JSON, default=list)
     author_id: Mapped[str] = mapped_column(String(64), index=True)
     # 与 AssetVersion.asset_id 构成环形外键：use_alter 让建表期先建两张表、再 ALTER 加约束，
@@ -296,3 +301,47 @@ class ReviewTask(Base):
     action: Mapped[str] = mapped_column(String(24), default="")  # confirm / accept_draft / stale / archive
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------- 检索派生数据（M2；可由 scripts/reindex.py 全量重建） ----------
+
+class AssetSearchDoc(Base):
+    """关键词检索的索引文档：jieba 预分词后的四个字段桶。
+
+    字段权重 title×4 / tags×3 / summary×2 / body×1（docs/design.md §5）在 PG 上由
+    setweight(A/B/C/D) 表达 —— 迁移会加一个 tsv 生成列（GENERATED ALWAYS AS ... STORED）
+    让数据库自己从这四列算 tsvector，写入方只管写分词串。ORM 不声明 tsv：TSVECTOR 是
+    PG 专属类型，声明了 models.py 就没法在 sqlite 上 create_all，测试全得依赖 PG。
+    sqlite 没有 tsv，关键词召回自动走 recall.py 里的可移植 Python 打分路径。
+    """
+
+    __tablename__ = "asset_search_doc"
+
+    asset_id: Mapped[int] = mapped_column(ForeignKey("knowledge_asset.id"), primary_key=True)
+    tok_title: Mapped[str] = mapped_column(Text, default="")
+    tok_tags: Mapped[str] = mapped_column(Text, default="")
+    tok_summary: Mapped[str] = mapped_column(Text, default="")
+    tok_body: Mapped[str] = mapped_column(Text, default="")
+    # 未分词的原文拼接：可移植路径做子串匹配用（中文不分词也应命中，与原型的 includes 行为一致）
+    raw_text: Mapped[str] = mapped_column(Text, default="")
+    # 源文本指纹，重建索引时跳过没变的资产
+    content_hash: Mapped[str] = mapped_column(String(64), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+
+
+class AssetEmbedding(Base):
+    """资产向量（bge-m3，来自 services/ai.py::embed）。
+
+    向量本体存 JSON（PG 上是 JSONB）：跨库一致，没有 pgvector 扩展也能用 —— 召回时
+    拉回 Python 算余弦，团队级库量（千条内）完全够用。PG 装了 pgvector 时，迁移会额外
+    建一个 vec vector(dim) 列 + HNSW 索引，recall.py 探测到就改走 ANN 加速路径。
+    """
+
+    __tablename__ = "asset_embedding"
+
+    asset_id: Mapped[int] = mapped_column(ForeignKey("knowledge_asset.id"), primary_key=True)
+    model: Mapped[str] = mapped_column(String(64), default="")
+    dim: Mapped[int] = mapped_column(Integer, default=0)
+    vector: Mapped[list] = mapped_column(JSON, default=list)
+    content_hash: Mapped[str] = mapped_column(String(64), default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)

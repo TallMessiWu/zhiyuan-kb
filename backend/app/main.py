@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .api import assets, dashboard, feedback, gaps, hooks, review, search
+from .api import assets, dashboard, feedback, gaps, home, hooks, review, search
 from .services.state_machine import InvalidTransition
 
 app = FastAPI(
@@ -13,6 +13,7 @@ app = FastAPI(
 )
 
 API = "/api/v1"
+app.include_router(home.router, prefix=API, tags=["home"])
 app.include_router(search.router, prefix=API, tags=["search"])
 app.include_router(assets.router, prefix=API, tags=["assets"])
 app.include_router(feedback.router, prefix=API, tags=["feedback"])

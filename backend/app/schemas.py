@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field, computed_field
 
 from .models import Direction, RefKind, Status, Tier, Trigger, VersionOrigin
 
-
 # 长度上限对齐 models.py 的列宽：sqlite 不校验 VARCHAR 长度，只有 PG 会在插入时报错，
 # 所以必须在入口挡住，否则超长输入在测试里静默通过、上了 PG 才 500。
 
@@ -48,16 +47,23 @@ class ScoreOut(BaseModel):
 
 
 class AssetBrief(BaseModel):
+    """列表项（搜索结果 / 首页）。带上 models·framework·fw_version 是因为原型的结果行
+    要渲染「模型 / 框架版本 / 更新 / 复用 / 作者」这条 meta —— 否则前端得为每条结果再拉一次详情。"""
+
     id: int
     title: str
     direction: Direction
     tier: Tier
     status: Status
     summary: str
+    summary_source: str = "rule"   # author / ai / rule，前端据此标注「AI 摘要」
     tags: list[str]
     author_id: str
     reuse_count: int
     updated_at: datetime
+    models: list[str] = []
+    framework: str = ""
+    fw_version: str = ""
 
     model_config = {"from_attributes": True}
 
@@ -155,8 +161,7 @@ class AssetDetail(AssetBrief):
     env_note: str
     status_reason: str
     created_at: datetime
-    models: list[str] = []
-    frameworks: list[FrameworkOut] = []
+    frameworks: list[FrameworkOut] = []      # models / framework / fw_version 继承自 AssetBrief
     current_version: VersionOut | None = None
     versions: list[VersionBrief] = []
     code_refs: list[CodeRefOut] = []
@@ -169,10 +174,23 @@ class SearchItem(BaseModel):
     score: ScoreOut
 
 
+class RecallOut(BaseModel):
+    """这次搜索实际用了哪条召回路 —— 排序可解释也包括「怎么召回的」，
+    而且能力探测降级（没有 pgvector / 网关不可达）必须让人看得见，不能静默。"""
+
+    keyword: str          # pg_tsvector / portable
+    vector: str           # pgvector / python / off / unavailable
+    keyword_hits: int = 0
+    vector_hits: int = 0
+
+
 class SearchResponse(BaseModel):
     items: list[SearchItem]
     search_event_id: int
     hist: bool = False
+    total: int = 0
+    terms: list[str] = []      # 前端 <mark> 高亮用的查询词（已滤掉单字）
+    recall: RecallOut
 
 
 class UsefulIn(BaseModel):
@@ -226,3 +244,51 @@ class AskResponse(BaseModel):
     risks: list[str] = []
     conflict: dict | None = None
     not_found: bool = False
+
+
+# ---------- 首页（GET /home）与缺口（GET /gaps） ----------
+
+class GapOut(BaseModel):
+    """知识缺口：来自「没有找到答案」反馈的累计需求（docs/design.md §9 分母的一部分）。"""
+
+    id: int
+    question: str
+    hit_count: int
+    first_at: datetime
+    last_at: datetime
+    reporters: list[str]
+    status: str            # open / claimed / resolved
+    claimed_by: str
+
+    model_config = {"from_attributes": True}
+
+    @computed_field  # 展示编号，与原型的 GAP-01 一致
+    @property
+    def code(self) -> str:
+        return f"GAP-{self.id:02d}"
+
+
+class RecentValidation(BaseModel):
+    """首页「最近验证」条目：资产 + 这次验证的证据（谁、何时、说明）。"""
+
+    asset: AssetBrief
+    validator_id: str
+    note: str
+    at: datetime
+
+
+class HomeStats(BaseModel):
+    """首页数字条。有效复用率不在这里 —— 它的口径（非作者成功复用 ÷ 需求事件）
+    是看板指标，M5 由事件表实时聚合，M2 拿半成品数字冒充等于违反硬规则 5。"""
+
+    total: int          # 在库资产（不含 ARCHIVED）
+    verified: int
+    review_due: int
+    open_gaps: int
+
+
+class HomeResponse(BaseModel):
+    stats: HomeStats
+    recent_validated: list[RecentValidation] = []
+    hot: list[AssetBrief] = []
+    gaps: list[GapOut] = []

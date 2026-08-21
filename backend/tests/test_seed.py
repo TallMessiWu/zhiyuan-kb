@@ -42,7 +42,7 @@ def prototype():
 
 @pytest.fixture()
 def seeded(session_factory, prototype):
-    assets, review_meta = prototype
+    assets, review_meta, _gaps = prototype
     db = session_factory()
     for raw in assets:
         seed_asset(db, raw, review_meta)
@@ -52,7 +52,7 @@ def seeded(session_factory, prototype):
 
 
 def test_prototype_yields_18_assets(prototype):
-    assets, review_meta = prototype
+    assets, review_meta, _gaps = prototype
     assert len(assets) == 18
     assert len({a["id"] for a in assets}) == 18
     assert set(review_meta) == {"KA-003", "KA-010", "KA-018"}
