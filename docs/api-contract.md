@@ -16,8 +16,17 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/search` | q, direction?, model?, framework?, status?, hist?(bool)。返回 items[{asset, score:{total, parts[{label,value}]}}]，同时落 SearchEvent |
+| GET | `/search` | q, direction?, model?, framework?, status?, hist?(bool), limit=20, offset=0。返回 `{items[{asset, score:{total,parts[{label,value}]}}], total, terms[], recall{keyword,vector,keyword_hits,vector_hits}, search_event_id, hist}`，同时落 SearchEvent（零结果也落 —— 它是需求事件） |
 | POST | `/ask` | {question}。返回 {answer_md, citations[{asset_id, fragment, status, fw_version, updated_at}], risks[], conflict?, not_found:bool} |
+
+`/search` 细则（实现见 docs/design.md §5）：
+
+- **q 为空** = 浏览模式：不召回，按状态 + 新鲜度 + 复用把候选铺开重排。
+- **硬过滤**：direction / status / hist，以及**显式**传入的 framework / model（「通用」视作匹配任何筛选）。
+- **软信号**：从 q 里推断出的框架（含 sglang / ascend / vllm 字样）只加减分，出现在 score.parts 里。
+- **terms**：分词后的查询词（已滤掉单字），前端据此做 `<mark>` 高亮。
+- **recall**：这次实际走的召回后端。`keyword` ∈ {pg_tsvector, portable}，
+  `vector` ∈ {pgvector, python, off, unavailable}。降级要看得见，不能静默。
 
 ## 反馈（三键，均免表单）
 
@@ -38,7 +47,8 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/gaps` · POST `/gaps/{id}/claim` | 列表 / 认领（认领后 AI 生成 DRAFT 底稿） |
+| GET | `/gaps` · POST `/gaps/{id}/claim` | 列表（open 优先、按 hit_count 降序，resolved 不返回）/ 认领（认领后 AI 生成 DRAFT 底稿） |
+| GET | `/home` | 首页一屏：`{stats{total,verified,review_due,open_gaps}, recent_validated[{asset,validator_id,note,at}], hot[asset], gaps[]}`。与 `/dashboard` 不是一回事 —— 那边是带口径的 7 指标，这边只是首屏展示数据 |
 | GET | `/dashboard` | 7 指标：reuse_rate{num,den,trend[]}, search_ok, not_found_30d, review_backlog, verified_count, rework_hours_trend[], coverage[direction][status] |
 
 ## Webhook

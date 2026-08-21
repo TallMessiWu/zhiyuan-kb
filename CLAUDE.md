@@ -46,7 +46,8 @@ docker compose up -d db
 cd backend
 pip install -e ".[dev]"          # 或 uv sync
 alembic upgrade head             # 建表（连接串取 ZY_DATABASE_URL）
-python scripts/seed.py           # 导入原型 18 条示例资产；覆盖导入加 --reset
+python scripts/seed.py           # 导入原型 18 条示例资产 + 4 条缺口，并建检索索引；覆盖导入加 --reset
+python scripts/reindex.py        # 改了分词规则/字段组装后重建索引；--embeddings 回填向量
 uvicorn app.main:app --reload    # http://localhost:8000/docs
 pytest                           # 全部测试走 sqlite 内存库，不需要 PG
 
@@ -56,17 +57,32 @@ npm install
 npm run dev                      # http://localhost:5173，/api 代理到 8000
 ```
 
-## 当前状态（2026-08-20 M1 完成）
+## 当前状态（2026-08-21 M2 完成）
 
 - [x] 设计定稿（docs/design.md）、原型验证通过
-- [x] backend：11 实体模型 + 状态机；Alembic 首个迁移；`POST /assets`、`GET /assets/{id}`、
-      `GET /assets/{id}/transitions`、`POST /feedback/useful`；`pytest` 39 passed
-- [x] frontend：theme.css（原型双主题 token）、详情页、沉淀页跑通真实接口
-- [x] 种子数据：`backend/scripts/seed.py` 导入原型 18 条资产（含验证/复用/代码引用/流水）
-- [x] 迁移已在真实 PostgreSQL 16.2 上验证：`upgrade head` 建出 14 张表 + 6 个枚举类型，
-      环形外键 `fk_knowledge_asset_current_version` 存在，`status_transition.trigger` 解析到
-      `transition_trigger` 而非 `pg_catalog` 伪类型；种子与 `--reset` 均通过；全链路 curl 通过
-- [ ] 检索、问答、复核队列、看板仍是骨架（M2–M5）
+- [x] **M1** backend：11 实体模型 + 状态机；Alembic 首个迁移；`POST /assets`、`GET /assets/{id}`、
+      `GET /assets/{id}/transitions`、`POST /feedback/useful`
+- [x] **M1** frontend：theme.css（原型双主题 token）、详情页、沉淀页跑通真实接口
+- [x] **M1** 迁移已在真实 PostgreSQL 16.2 上验证：环形外键 `fk_knowledge_asset_current_version`
+      存在，`status_transition.trigger` 解析到 `transition_trigger` 而非 `pg_catalog` 伪类型
+- [x] **M2** 双路召回：PG 全文（jieba 预分词 + tsvector 生成列 + GIN）+ pgvector（HNSW），
+      RRF 融合 → `services/search.py` 重排；`GET /search` 逐条返回分项得分与召回后端
+- [x] **M2** `POST /assets` 摘要改由 AI 生成（`summary_source` 标注来源），网关不可用回落规则式
+- [x] **M2** `GET /home`、`GET /gaps`（只读）；前端首页与搜索结果页对齐原型
+- [x] **M2** 在真实 PG 上验收：中文查询、字段权重、状态可信度、历史隔离、显式/推断筛选、
+      pgvector `<=>` + HNSW 全部实测通过；`pytest` 103 passed（sqlite）
+- [ ] 反馈闭环、自动更新、问答、看板仍是骨架（M3–M5）
+
+### M2 期间定下的三件事（改动别退回去）
+
+1. **PG 专属结构不进 ORM**：`asset_search_doc.tsv`（tsvector 生成列）和 `asset_embedding.vec`
+   （pgvector 列）都只在迁移里建，models.py 不声明它们 —— 这两个类型是 PG 专属，声明了
+   `models.py` 就没法在 sqlite 上 `create_all`，全部测试都得改成依赖 PG。
+   召回层用 `literal_column` 引用它们，并在启动时探测存在与否（`recall.capabilities`）。
+2. **生成列的表达式必须 immutable**：`to_tsvector('simple', col)`（配置名写成字面量）才行；
+   写成 `to_tsvector(col)` 走默认配置是 stable，PG 直接拒绝建列。
+3. **两路召回都必须能降级**，且降级要随响应返回（`recall` 字段）。判断可用性的顺序是
+   「方言 → 列在不在 → 网关这次通不通」，任何一环失败都只影响那一路，不影响搜索可用性。
 
 ### M1 期间发现并修掉的两个 PG 专属问题（改动别退回去）
 
@@ -77,9 +93,6 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 
 ## 下一步 Backlog（按序执行）
 
-- **M2 检索**：PG 全文（zhparser 或 jieba 预分词）+ pgvector(bge-m3) 双路召回，
-  RRF 融合 + `services/search.py` 重排公式；`GET /search` 返回分项得分（排序可解释）。
-  顺带把 `POST /assets` 里规则式的 summary 派生换成 AI 生成。
 - **M3 反馈闭环**：补 `POST /feedback/stale`、`POST /feedback/not-found`
   → ReviewTask/KnowledgeGap；`useful` 已在 M1 落地。
 - **M4 自动更新**：GitHub/GitLab webhook → CodeReference 匹配（24h 去抖）→ REVIEW-DUE +
@@ -105,8 +118,9 @@ powershell -File scripts/devdb.ps1 reset    # 删库重来
 正好是 `config.py` 的默认值，所以 `ZY_DATABASE_URL` 不用设。
 数据目录 `.pgdata/` 与 venv `.pgvenv/` 都在 `.gitignore` 里。
 
-**局限：这个 Windows 构建不带 pgvector 扩展**，M2 的向量召回还是得用 docker compose 的
-`pgvector/pgvector:pg16`，或另找带扩展的 PG。M1 用不到 pgvector。
+**这个 Windows 构建自带 pgvector 0.6.2**（M2 实测：`CREATE EXTENSION vector` 成功，
+`vector(1024)` 列 + HNSW 索引建得出来，`<=>` 查询跑得通）。早前「不带 pgvector」的判断是错的。
+即便换到没有该扩展的 PG 也能跑：迁移会跳过 vec 列，向量召回自动降级为 Python 余弦。
 
 写这个脚本时踩到的三个 Windows 坑（改动别退回去）：
 1. `.ps1` 含中文必须存成 **UTF-8 with BOM** —— Windows PowerShell 5.1 没 BOM 就按系统 ANSI 码页读，直接语法报错。
