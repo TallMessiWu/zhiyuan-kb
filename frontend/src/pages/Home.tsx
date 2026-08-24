@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { get } from "../api/client";
+import { get, post } from "../api/client";
 import { StatusPill } from "../lib/display";
 import { fmtAgo } from "../lib/display";
+import { useToast } from "../lib/toast";
 import { userName } from "../lib/users";
-import type { HomeResponse } from "../types";
+import type { GapOut, HomeResponse } from "../types";
 
 // 首页：统一搜索框 + 快捷入口 + 数字条 + 最近验证 + 热门 + 待认领缺口 + 状态规则速览。
 // DOM 结构与文案逐条对照 prototype 的 renderHome()。数据来自 GET /api/v1/home。
@@ -20,12 +21,38 @@ export default function Home() {
   const [data, setData] = useState<HomeResponse | null>(null);
   const [error, setError] = useState("");
   const [q, setQ] = useState("");
+  const [claiming, setClaiming] = useState<number | null>(null);
+  const { setToast, toastBox } = useToast();
 
   useEffect(() => {
     get<HomeResponse>("/home")
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
+
+  // 认领 = 登记「我来写这份知识」，让别人不再重复补。它不产出资产，
+  // 所以只就地更新这一条缺口，不重拉整个首页。
+  async function claimGap(gap: GapOut) {
+    if (claiming !== null) return;
+    setClaiming(gap.id);
+    try {
+      const claimed = await post<GapOut>(`/gaps/${gap.id}/claim`, {});
+      setData((prev) =>
+        prev ? { ...prev, gaps: prev.gaps.map((g) => (g.id === claimed.id ? claimed : g)) } : prev,
+      );
+      setToast(
+        <>
+          已认领 {claimed.code}，AI 将基于相关 Issue / 会话生成草稿底稿。
+          <br />
+          写好后从「沉淀记录」发布，缺口会随之关闭。
+        </>,
+      );
+    } catch (e) {
+      setToast(<>认领失败：{e instanceof Error ? e.message : String(e)}</>);
+    } finally {
+      setClaiming(null);
+    }
+  }
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,8 +171,12 @@ export default function Home() {
                   ) : (
                     <>
                       {" · "}
-                      <button className="btn sm" disabled title="M3 反馈闭环上线后可用">
-                        认领并生成草稿
+                      <button
+                        className="btn sm"
+                        onClick={() => void claimGap(g)}
+                        disabled={claiming !== null}
+                      >
+                        {claiming === g.id ? "认领中…" : "认领并生成草稿"}
                       </button>
                     </>
                   )}
@@ -168,6 +199,8 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {toastBox}
     </>
   );
 }

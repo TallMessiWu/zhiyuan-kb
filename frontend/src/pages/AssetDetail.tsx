@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, CURRENT_USER, get, post } from "../api/client";
 import { DirectionChip, StatusPill, TierChip, fmtDate } from "../lib/display";
 import { renderMarkdown } from "../lib/markdown";
+import { useToast } from "../lib/toast";
 import { userName } from "../lib/users";
 import {
   REUSE_OUTCOME_ZH,
@@ -11,12 +12,16 @@ import {
   type AssetDetail as Asset,
   type CodeRefOut,
   type FrameworkOut,
+  type NotFoundOut,
+  type StaleOut,
   type UsefulOut,
 } from "../types";
 
 // 知识详情页：正文 + 右栏（适用环境/关联代码/Issue·PR/验证记录/复用记录/历史版本）
 // + 底部常驻三键反馈条。DOM 结构、文案、右栏顺序逐条对照 prototype 的 renderAsset()。
-// M1 只接通「✓ 有用，完成任务」→ POST /feedback/useful；另两键 M3 才有后端。
+// 三键在 M3 全部接通：有用 → /feedback/useful、内容可能过时 → /feedback/stale、
+// 没有找到答案 → /feedback/not-found。前两键只作用于本资产，第三键记的是「库里缺这份知识」，
+// 与本资产无关 —— 所以它要问一句「你想找的是什么」，那句话才是缺口的内容。
 
 /** 框架 + 版本：优先显示验证过的版本，否则退回 min–max 区间 */
 function fwLabel(f: FrameworkOut): string {
@@ -39,11 +44,13 @@ export default function AssetDetail() {
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errMsg, setErrMsg] = useState("");
 
-  // 反馈条：三键中只有「有用」展开一个可选的任务说明输入（不许加字段）
-  const [fbOpen, setFbOpen] = useState(false);
+  // 反馈条：「有用」展开一个可选的任务说明输入，「没有找到答案」展开一个待找内容输入。
+  // 两者都只有一个字段，且同时最多展开一个（fbForm），不许再加字段（硬规则 6）。
+  const [fbForm, setFbForm] = useState<"useful" | "gap" | null>(null);
   const [fbTask, setFbTask] = useState("");
+  const [gapQuery, setGapQuery] = useState("");
   const [fbBusy, setFbBusy] = useState(false);
-  const [toast, setToast] = useState<ReactNode>(null);
+  const { setToast, toastBox } = useToast();
   const fbInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -67,19 +74,14 @@ export default function AssetDetail() {
 
   // 切换资产时收起反馈表单，避免上一条资产的输入残留
   useEffect(() => {
-    setFbOpen(false);
+    setFbForm(null);
     setFbTask("");
+    setGapQuery("");
   }, [id]);
 
   useEffect(() => {
-    if (fbOpen) fbInputRef.current?.focus();
-  }, [fbOpen]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 5200);
-    return () => window.clearTimeout(t);
-  }, [toast]);
+    if (fbForm) fbInputRef.current?.focus();
+  }, [fbForm]);
 
   async function confirmUseful() {
     if (!asset || fbBusy) return;
@@ -91,7 +93,7 @@ export default function AssetDetail() {
         search_event_id: null,
       });
       const fw = asset.frameworks[0];
-      setFbOpen(false);
+      setFbForm(null);
       setFbTask("");
       setToast(
         <>
@@ -113,6 +115,57 @@ export default function AssetDetail() {
         </>,
       );
       await load();
+    } catch (e) {
+      setToast(<>记录失败：{e instanceof Error ? e.message : String(e)}</>);
+    } finally {
+      setFbBusy(false);
+    }
+  }
+
+  // 「内容可能过时」：一次点击，不展开任何输入 —— 说明由服务端从使用者与原状态自动组装。
+  async function reportStale() {
+    if (!asset || fbBusy) return;
+    setFbBusy(true);
+    try {
+      const r = await post<StaleOut>("/feedback/stale", { asset_id: asset.id, note: "" });
+      setToast(
+        r.merged ? (
+          <>{r.note}</>
+        ) : (
+          <>
+            已将 {asset.code} 标记为 REVIEW-DUE 并加入复核队列。{r.note}
+          </>
+        ),
+      );
+      await load();
+    } catch (e) {
+      setToast(<>记录失败：{e instanceof Error ? e.message : String(e)}</>);
+    } finally {
+      setFbBusy(false);
+    }
+  }
+
+  // 「没有找到答案」：记的是知识缺口，不改这份资产的任何状态。
+  async function confirmGap() {
+    const question = gapQuery.trim();
+    if (!question || fbBusy) return;
+    setFbBusy(true);
+    try {
+      const r = await post<NotFoundOut>("/feedback/not-found", {
+        query: question,
+        search_event_id: null,
+      });
+      setFbForm(null);
+      setGapQuery("");
+      setToast(
+        <>
+          已记录知识缺口：「{r.gap.question}」
+          <br />
+          {r.created
+            ? "它已进入首页待补充列表，累计后可由成员认领。"
+            : `已并入同一需求的 ${r.gap.code}，累计被问 ${r.gap.hit_count} 次。`}
+        </>,
+      );
     } catch (e) {
       setToast(<>记录失败：{e instanceof Error ? e.message : String(e)}</>);
     } finally {
@@ -220,23 +273,36 @@ export default function AssetDetail() {
                 <span className="q">用完这份知识了？一次点击记录结果：</span>
                 <button
                   className="btn ok sm"
-                  onClick={() => setFbOpen(true)}
+                  onClick={() => setFbForm("useful")}
                   disabled={fbBusy}
                 >
                   ✓ 有用，完成任务
                 </button>
-                <button className="btn warn sm" disabled title="M3 反馈闭环上线后可用">
+                <button
+                  className="btn warn sm"
+                  onClick={() => void reportStale()}
+                  disabled={fbBusy || asset.status === "REVIEW_DUE"}
+                  title={
+                    asset.status === "REVIEW_DUE"
+                      ? "该资产已在复核队列中"
+                      : "标记为可能过时并进入复核队列"
+                  }
+                >
                   内容可能过时
                 </button>
-                <button className="btn sm" disabled title="M3 反馈闭环上线后可用">
+                <button
+                  className="btn sm"
+                  onClick={() => setFbForm("gap")}
+                  disabled={fbBusy}
+                >
                   没有找到答案
                 </button>
                 <span style={{ fontSize: 11, color: "var(--ink3)" }}>
-                  系统自动记录：使用者、资产版本、时间；无需填表。（后两项 M3 接入）
+                  系统自动记录：使用者、资产版本、时间；无需填表。
                 </span>
               </div>
 
-              {fbOpen && (
+              {fbForm && (
                 <div
                   className="card"
                   style={{
@@ -247,16 +313,27 @@ export default function AssetDetail() {
                     flexWrap: "wrap",
                   }}
                 >
-                  <span style={{ fontSize: 12 }}>这次用它做了什么？（可留空）</span>
+                  <span style={{ fontSize: 12 }}>
+                    {fbForm === "useful"
+                      ? "这次用它做了什么？（可留空）"
+                      : "你想找的是什么？记为知识缺口"}
+                  </span>
                   <input
                     ref={fbInputRef}
                     type="text"
-                    value={fbTask}
-                    onChange={(e) => setFbTask(e.target.value)}
+                    value={fbForm === "useful" ? fbTask : gapQuery}
+                    onChange={(e) =>
+                      fbForm === "useful" ? setFbTask(e.target.value) : setGapQuery(e.target.value)
+                    }
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") void confirmUseful();
+                      if (e.key !== "Enter") return;
+                      void (fbForm === "useful" ? confirmUseful() : confirmGap());
                     }}
-                    placeholder="如：客户环境部署 / 精度排查…"
+                    placeholder={
+                      fbForm === "useful"
+                        ? "如：客户环境部署 / 精度排查…"
+                        : "如：PD 分离在 vllm-ascend 的部署方式…"
+                    }
                     style={{
                       flex: 1,
                       minWidth: 180,
@@ -270,10 +347,10 @@ export default function AssetDetail() {
                   />
                   <button
                     className="btn pri sm"
-                    onClick={() => void confirmUseful()}
-                    disabled={fbBusy}
+                    onClick={() => void (fbForm === "useful" ? confirmUseful() : confirmGap())}
+                    disabled={fbBusy || (fbForm === "gap" && !gapQuery.trim())}
                   >
-                    {fbBusy ? "记录中…" : "确认记录"}
+                    {fbBusy ? "记录中…" : fbForm === "useful" ? "确认记录" : "记录缺口"}
                   </button>
                 </div>
               )}
@@ -403,11 +480,7 @@ export default function AssetDetail() {
         </aside>
       </div>
 
-      {toast && (
-        <div className="toastbox">
-          <div className="toast">{toast}</div>
-        </div>
-      )}
+      {toastBox}
     </>
   );
 }

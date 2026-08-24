@@ -242,6 +242,23 @@ export interface UsefulOut {
   note: string;
 }
 
+/** 三键之二「内容可能过时」（POST /feedback/stale）。merged=true 表示并入了已有复核任务。 */
+export interface StaleOut {
+  feedback_id: number;
+  asset_id: number;
+  status: Status;
+  review_task_id: number;
+  merged: boolean;
+  note: string;
+}
+
+/** 三键之三「没有找到答案」（POST /feedback/not-found）。created=false 表示累计到了已有缺口。 */
+export interface NotFoundOut {
+  feedback_id: number;
+  gap: GapOut;
+  created: boolean;
+}
+
 /* ---------- 首页（GET /home）与缺口（GET /gaps） ---------- */
 
 export interface GapOut {

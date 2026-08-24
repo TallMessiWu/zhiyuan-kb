@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { get } from "../api/client";
+import { get, post } from "../api/client";
 import { DirectionChip, StatusPill, TierChip, fmtAgo } from "../lib/display";
 import { Highlight } from "../lib/highlight";
+import { useToast } from "../lib/toast";
 import { userName } from "../lib/users";
-import { DIRECTION_ZH, type Direction, type SearchResponse } from "../types";
+import { DIRECTION_ZH, type Direction, type NotFoundOut, type SearchResponse } from "../types";
 
 // 搜索结果页：状态标注 + 命中高亮 + 分项得分（「为什么排在这里」）+ 历史资产开关 + 记缺口。
 // DOM 结构与文案对照 prototype 的 renderSearch()；数据来自 GET /api/v1/search。
@@ -57,6 +58,8 @@ export default function Search() {
   const [data, setData] = useState<SearchResponse | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [gapBusy, setGapBusy] = useState(false);
+  const { setToast, toastBox } = useToast();
 
   useEffect(() => setDraftQuery(filters.q), [filters.q]);
 
@@ -84,6 +87,33 @@ export default function Search() {
     (patch: Partial<Filters>) => setParams(toQueryString({ ...filters, ...patch })),
     [filters, setParams],
   );
+
+  // 「记录知识缺口」：把这次搜索连同 search_event_id 一起报上去 —— 有了这条链路，看板才能
+  // 把「发生过需求」和「没有可用知识」对上（design.md §9 的分母）。零结果和有结果但没解决
+  // 都要能记：后者恰恰是最该补的那类缺口。
+  async function reportGap() {
+    if (gapBusy) return;
+    setGapBusy(true);
+    try {
+      const r = await post<NotFoundOut>("/feedback/not-found", {
+        query: filters.q,
+        search_event_id: data?.search_event_id ?? null,
+      });
+      setToast(
+        <>
+          已记录知识缺口：「{r.gap.question}」
+          <br />
+          {r.created
+            ? "系统同时记下了你的搜索词与时间，形成需求事件。"
+            : `已并入同一需求的 ${r.gap.code}，累计被问 ${r.gap.hit_count} 次。`}
+        </>,
+      );
+    } catch (e) {
+      setToast(<>记录失败：{e instanceof Error ? e.message : String(e)}</>);
+    } finally {
+      setGapBusy(false);
+    }
+  }
 
   // 模型下拉的选项来自当前结果集：M2 没有 facet 接口，与其写死一份会过期的清单，
   // 不如照实呈现「这批结果里有哪些模型」，并保证当前选中的值不会从列表里消失。
@@ -244,7 +274,7 @@ export default function Search() {
           没有匹配的资产。
           <br />
           <br />
-          <button className="btn" disabled title="M3 反馈闭环上线后可用">
+          <button className="btn" onClick={() => void reportGap()} disabled={gapBusy}>
             没有找到答案 —— 记录为知识缺口
           </button>
           <div style={{ marginTop: 8, fontSize: 11.5 }}>
@@ -255,11 +285,13 @@ export default function Search() {
 
       {!loading && (data?.items.length ?? 0) > 0 && (
         <div style={{ marginTop: 14 }}>
-          <button className="btn sm" disabled title="M3 反馈闭环上线后可用">
+          <button className="btn sm" onClick={() => void reportGap()} disabled={gapBusy}>
             这些结果没有解决我的问题 → 记录知识缺口
           </button>
         </div>
       )}
+
+      {toastBox}
     </>
   );
 }
