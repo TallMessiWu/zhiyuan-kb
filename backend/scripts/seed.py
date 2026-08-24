@@ -24,7 +24,7 @@ import re
 import sys
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, select, text, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.orm import Session
 
 from app.db import Base, get_engine, get_sessionmaker
@@ -75,7 +75,9 @@ REVIEW_TRIGGERS = {
     "版本变更": Trigger.version_change,
     "人工反馈": Trigger.user_feedback,
 }
-PRIORITIES = {"高": 3, "中": 2, "低": 1}
+# 档位值对齐 services/review_queue.py 的优先级公式与阈值（高≥8 / 中≥2），
+# 这样 seed 数据和线上现算的任务在同一把尺子上排序、贴同一种标签。
+PRIORITIES = {"高": 12, "中": 4, "低": 1}
 
 
 # ---------- 原型数据提取 ----------
@@ -297,6 +299,22 @@ def _review_task(db: Session, asset: KnowledgeAsset, meta: dict) -> ReviewTask:
     )
     db.add(task)
     db.flush()
+    # 原型 REVIEW_META.draft 落成真正的 AssetVersion(created_from=ai_draft)，挂到任务上但
+    # 不动 current_version_id —— 与 webhook 线上生成草稿的形态一致（review_queue.attach_ai_review），
+    # 复核队列页的草稿折叠框和「接受 AI 更新草稿」才有真数据可演示。
+    if meta.get("draft"):
+        seq = (db.scalar(
+            select(func.max(AssetVersion.seq)).where(AssetVersion.asset_id == asset.id)
+        ) or 0) + 1
+        version = AssetVersion(
+            asset_id=asset.id, seq=seq, body_md=meta["draft"],
+            change_note=f"AI 更新草稿（{meta['trigger']}，待复核采纳）",
+            created_by="ai", created_from=VersionOrigin.ai_draft,
+            created_at=task.created_at,
+        )
+        db.add(version)
+        db.flush()
+        task.ai_draft_version_id = version.id
     return task
 
 
@@ -398,6 +416,10 @@ def seed_asset(db: Session, raw: dict, review_meta: dict) -> KnowledgeAsset:
             evidence_type="validation", evidence_id=confirm.id, at=confirm.at,
             note=raw["statusReason"],
         )
+        # 这次复核已经发生（stale_confirm 记录在案），任务同步标记为已处理，
+        # 否则它会以 open 状态挂在一个 STALE 资产上 —— 队列不展示、也没人能再处理它
+        task.state, task.handled_by, task.action, task.handled_at = \
+            "done", confirm.validator_id, "stale", confirm.at
     elif target is Status.ARCHIVED:
         # design.md §4：归档的证据就是流水的 note（填替代资产回链），没有独立证据表
         state_machine.transition(

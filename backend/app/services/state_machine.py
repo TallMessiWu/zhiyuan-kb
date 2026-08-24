@@ -19,7 +19,10 @@ ALLOWED: dict[tuple[Status, Status], set[Trigger]] = {
     (Status.DRAFT, Status.REVIEW_DUE): {Trigger.code_change, Trigger.version_change, Trigger.user_feedback},
     (Status.VERIFIED, Status.REVIEW_DUE): {Trigger.code_change, Trigger.version_change, Trigger.user_feedback},
     (Status.REVIEW_DUE, Status.VERIFIED): {Trigger.review_confirm},
-    (Status.REVIEW_DUE, Status.DRAFT): {Trigger.review_accept_draft},
+    # review_confirm 也可以回 DRAFT：复核回答的是「变更是否影响了这份知识」，不是「知识对不对」。
+    # 从 DRAFT 进入 REVIEW_DUE 的资产被确认「未受影响」后只能回 DRAFT —— 它从未被验证过，
+    # 复核确认不产生验证证据，直达 VERIFIED 就绕过了非作者校验（硬规则 3）。
+    (Status.REVIEW_DUE, Status.DRAFT): {Trigger.review_accept_draft, Trigger.review_confirm},
     (Status.REVIEW_DUE, Status.STALE): {Trigger.review_stale},
     (Status.DRAFT, Status.ARCHIVED): {Trigger.review_replace},
     (Status.VERIFIED, Status.ARCHIVED): {Trigger.review_replace},

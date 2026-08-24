@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, computed_field
 
@@ -231,10 +232,67 @@ class NotFoundIn(BaseModel):
     search_event_id: int | None = None
 
 
+# ---------- 复核队列（GET /review · POST /review/{id}/resolve，M4） ----------
+
+class ReviewTaskOut(BaseModel):
+    """队列条目：任务本体 + 资产列表项 + AI 产物。ai_draft 直接带正文 ——
+    队列页的草稿折叠框要就地展示，不该为每条任务再拉一次版本接口。"""
+
+    id: int
+    asset: AssetBrief
+    trigger: Trigger              # code_change / version_change / user_feedback
+    trigger_detail: str
+    diff_ref: str
+    ai_impact_summary: str        # 空串 = 网关降级没生成（前端不渲染该块）
+    ai_draft_version_id: int | None
+    ai_draft: str = ""            # 草稿正文；空串 = 没有草稿（accept_draft 会 409）
+    priority: int
+    priority_label: str           # 高 / 中 / 低（阈值见 services/review_queue.py）
+    usage_30d: int                # 近 30 天复用次数（队列行展示）
+    created_at: datetime          # 检出时间
+
+
+class ReviewListOut(BaseModel):
+    items: list[ReviewTaskOut]
+    total: int
+
+
 class ReviewResolveIn(BaseModel):
-    action: str  # confirm / accept_draft / stale / archive
-    note: str = ""
-    replaced_by: int | None = None
+    # Literal 而不是裸 str：非法动作应当是 422，而不是服务层的 ValueError → 500
+    action: Literal["confirm", "accept_draft", "stale", "archive"]
+    note: str = Field(default="", max_length=500)
+    replaced_by: int | None = None   # archive 时的替代资产回链
+
+
+class ReviewResolveOut(BaseModel):
+    task_id: int
+    action: str
+    asset_id: int
+    status: Status                # 处理后的资产状态
+    current_version_id: int | None = None
+    note: str = ""                # 结果说明（前端 toast 直接用）
+
+
+# ---------- Webhook（POST /hooks/git，M4） ----------
+
+class HookTaskOut(BaseModel):
+    """一次事件对一个资产的处理回执。created=False 表示并进了去抖窗口内的已有任务。"""
+
+    review_task_id: int
+    asset_id: int
+    created: bool
+
+
+class HookAck(BaseModel):
+    """webhook 应答。不相关事件也返回 200（handled=False + reason），
+    否则 Git 平台会按失败重试，把同一个事件反复砸过来。"""
+
+    handled: bool
+    reason: str = ""
+    event: str = ""               # push / tag / pr
+    repo: str = ""
+    matched_refs: int = 0         # 命中的 CodeReference 条数
+    tasks: list[HookTaskOut] = []
 
 
 class AskIn(BaseModel):

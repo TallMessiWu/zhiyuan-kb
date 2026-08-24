@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # 复核触发去抖窗口（小时）与按需治理阈值，见 docs/design.md §4/§7
     review_debounce_hours: int = 24
     governance_usage_days: int = 90
+    # 按需治理的「高风险标签」（逗号分隔）：命中任一即进人工复核队列，且优先级风险系数取 2。
+    # design.md §4 只说「高风险标签」没冻结取值，具体哪些标签算高风险由团队自己配。
+    high_risk_tags: str = "高风险"
 
     # 知识缺口的合并阈值（M3）：两条「没有找到答案」的问句词集合 Jaccard 达到多少算同一个需求。
     # 0.5 是折中值 —— 再低会把「vllm-ascend 部署」和「sglang 部署」并成一条，

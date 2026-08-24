@@ -24,7 +24,7 @@ HOT_LIMIT = 5
 GAPS_LIMIT = 6
 
 
-def _briefs(db: Session, assets: list[KnowledgeAsset]) -> dict[int, AssetBrief]:
+def briefs_for(db: Session, assets: list[KnowledgeAsset]) -> dict[int, AssetBrief]:
     """批量补齐列表项需要的框架/模型，避免逐条查库。"""
     ids = [a.id for a in assets]
     if not ids:
@@ -79,7 +79,7 @@ def home(db: Session = Depends(get_db)):
         .limit(HOT_LIMIT)
     ).all())
 
-    briefs = _briefs(db, [a for _, a in recent] + hot)
+    briefs = briefs_for(db, [a for _, a in recent] + hot)
     return HomeResponse(
         stats=stats,
         recent_validated=[

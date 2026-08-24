@@ -41,8 +41,8 @@ DIRECTION_ZH = {
 EMBED_BODY_CHARS = 1500
 
 
-def _body_md(db: Session, asset: KnowledgeAsset) -> str:
-    """当前版本正文；没有 current_version_id 时退回最新一版。"""
+def body_md_of(db: Session, asset: KnowledgeAsset) -> str:
+    """当前版本正文；没有 current_version_id 时退回最新一版。复核（M4）与索引共用。"""
     if asset.current_version_id:
         version = db.get(AssetVersion, asset.current_version_id)
         if version is not None:
@@ -75,7 +75,7 @@ def source_fields(db: Session, asset: KnowledgeAsset, *, body_md: str | None = N
         "title": asset.title,
         "tags": " ".join(t for t in tags if t),
         "summary": asset.summary,
-        "body": body_md if body_md is not None else _body_md(db, asset),
+        "body": body_md if body_md is not None else body_md_of(db, asset),
     }
 
 

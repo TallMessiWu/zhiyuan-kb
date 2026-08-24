@@ -83,6 +83,16 @@ def test_review_confirm_restores_verified(db, draft_asset):
     assert draft_asset.status == Status.VERIFIED
 
 
+def test_review_confirm_can_return_to_draft(db, draft_asset):
+    """从 DRAFT 进入 REVIEW_DUE 的资产，复核确认「未受影响」只能回 DRAFT ——
+    复核不判断知识对错，确认不构成验证证据（M4，与 review_queue.resolve 配套的边）。"""
+    sm.transition(db, draft_asset, Status.REVIEW_DUE, Trigger.code_change,
+                  actor="system", evidence_type="review_task", evidence_id=8)
+    sm.transition(db, draft_asset, Status.DRAFT, Trigger.review_confirm,
+                  actor="wanglei", evidence_type="validation", evidence_id=9)
+    assert draft_asset.status == Status.DRAFT
+
+
 def test_stale_then_archive(db, draft_asset):
     sm.transition(db, draft_asset, Status.REVIEW_DUE, Trigger.code_change,
                   actor="system", evidence_type="review_task", evidence_id=6)

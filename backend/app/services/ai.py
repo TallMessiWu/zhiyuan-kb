@@ -132,17 +132,52 @@ def gateway_configured() -> bool:
 
 def draft_from_session(transcript: str) -> dict:
     """从会话/Diff/Issue 提取草稿：{title, problem, env, conclusion, tags, direction, code_refs}。
-    TODO(M4/M5 缺口认领)：prompt 模板 + JSON 结构化输出校验。"""
+    TODO(M5 缺口认领)：prompt 模板 + JSON 结构化输出校验。"""
     raise NotImplementedError
 
 
-def impact_summary(asset_body: str, diff_text: str) -> str:
-    """生成「可能受影响内容」摘要：指出资产哪一节受哪些 diff 影响、哪些节不受影响。
-    TODO(M4)"""
-    raise NotImplementedError
+# 影响摘要长度上限：复核队列一条里要读完，比检索摘要（140）宽松但不该是一篇文章
+IMPACT_MAX = 400
+_IMPACT_SYSTEM = (
+    "你是推理框架团队的知识库维护助手。对照一份知识资产的正文与其关联代码/版本的变更描述，"
+    "指出资产哪些小节可能因这次变更失效、哪些小节不受影响，并给出判断依据。"
+    "只做影响面分析，不判断知识本身的对错，也不要建议新的结论。"
+    f"中文作答，不超过 {IMPACT_MAX} 字，不要换行、不要列表符号。"
+)
+
+_DRAFT_SYSTEM = (
+    "你是推理框架团队的知识库编辑。按给出的代码/版本变更修订知识资产正文，"
+    "输出完整的更新后 markdown 正文：未受影响的小节保留原文，只改写受影响的部分，"
+    "并在改动处以（待验证）标注。拿不准的内容保留原文并注明存疑。"
+    "直接输出正文，不要任何解释性前言或代码围栏。"
+)
+
+# 送入 prompt 的截断：正文取前 6000 字（结论都在前面），变更描述取前 2000 字。
+_PROMPT_BODY_CHARS = 6000
+_PROMPT_CHANGE_CHARS = 2000
 
 
-def update_draft(asset_body: str, diff_text: str) -> str:
-    """生成更新草稿正文（markdown）。调用方负责以 created_from=ai_draft 建版本。
-    TODO(M4)"""
-    raise NotImplementedError
+def impact_summary(asset_body: str, change_text: str) -> str | None:
+    """生成「可能受影响内容」摘要。返回 None 表示网关不可用 —— 复核任务照建，只是没有摘要。"""
+    text = chat(
+        f"资产正文：\n{asset_body[:_PROMPT_BODY_CHARS]}\n\n代码/版本变更：\n{change_text[:_PROMPT_CHANGE_CHARS]}",
+        _IMPACT_SYSTEM,
+    )
+    if not text:
+        return None
+    return " ".join(text.split())[:IMPACT_MAX]
+
+
+def update_draft(asset_body: str, change_text: str) -> str | None:
+    """生成更新草稿正文（markdown）。返回 None 表示网关不可用，调用方跳过建草稿版本。
+
+    调用方（services/review_queue.py::attach_ai_review）负责以 created_from=ai_draft 建版本；
+    草稿版本在被复核「接受」前不改 current_version_id（硬规则 1：AI 只到草稿为止）。
+    """
+    text = chat(
+        f"资产正文：\n{asset_body[:_PROMPT_BODY_CHARS]}\n\n代码/版本变更：\n{change_text[:_PROMPT_CHANGE_CHARS]}",
+        _DRAFT_SYSTEM,
+    )
+    if not text:
+        return None
+    return text.strip()
