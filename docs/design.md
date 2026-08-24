@@ -57,13 +57,19 @@ ReviewTask       id asset_id trigger(code_change|version_change|user_feedback) t
 | → DRAFT | 沉淀发布 / 缺口认领生成 / 复核接受 AI 草稿 | 自动 | AssetVersion |
 | DRAFT → VERIFIED | 非作者「有用，完成任务」(outcome=success) 或非作者人工验证 | 自动 | ReuseEvent/ValidationRecord，**validator≠author 强校验** |
 | VERIFIED/DRAFT → REVIEW_DUE | watch 代码路径/配置变更；框架版本基线变化；「内容可能过时」反馈 | 自动 | ReviewTask |
-| REVIEW_DUE → VERIFIED | 复核选「仍然有效」 | 人工 | ValidationRecord(review_confirm) |
-| REVIEW_DUE → DRAFT | 复核选「接受 AI 更新草稿」→ 新版本。**绝不直达 VERIFIED** | 人工 | AssetVersion(ai_draft) |
+| REVIEW_DUE → VERIFIED | 复核选「仍然有效」（限 VERIFIED 进入 REVIEW_DUE 的资产） | 人工 | ValidationRecord(review_confirm) |
+| REVIEW_DUE → DRAFT | 复核选「接受 AI 更新草稿」→ 新版本，**绝不直达 VERIFIED**；或从 DRAFT 进入 REVIEW_DUE 的资产被确认「未受影响」 | 人工 | AssetVersion(ai_draft) / ValidationRecord(review_confirm) |
 | REVIEW_DUE → STALE | 复核确认失效（保留失效说明与替代指引） | 人工 | ValidationRecord(stale_confirm) |
 | 任意 → ARCHIVED | 被替代/重复/不再需要（填替代资产回链） | 人工 | StatusTransition.note |
 
+「仍然有效」的落地口径（M4）：confirm 恢复**进入 REVIEW_DUE 前的状态** —— 复核回答的是
+「变更是否影响了这份知识」，不是「知识对不对」；从未被验证过的 DRAFT 不能借一次复核确认
+绕过非作者校验变成 VERIFIED。
+
 按需治理：进入人工队列需 `status=REVIEW_DUE` **且**（近 90 天有复用或点击 / tier=core / 高风险标签）。
 其余 REVIEW_DUE 只降权不打扰。DRAFT 可永久存在。老 Wiki 被命中≥3 次/被引用/被变更关联才生成盘查任务。
+M4 落地口径：「有复用或点击」以 ReuseEvent ∪ UserFeedback 近似 —— 点击流水前端尚未上报，
+而反馈本身就是最强的「有人在用」信号；高风险标签集合由 `ZY_HIGH_RISK_TAGS` 配置（默认只有「高风险」）。
 
 ## 5. 检索与排序
 
@@ -115,6 +121,11 @@ webhook（push/PR merge/tag/基线升级）→ 匹配 CodeReference(watch=true)�
 → 轮值四选一（仍有效/接受草稿/失效/归档）。
 纯格式化/注释 diff 由 AI 预判抑制，抑制记录可抽查。
 框架版本基线是全局订阅：基线升级一次批量触发相关资产。
+
+M4 落地注记：webhook payload 只有变更文件清单与提交说明，没有 diff 正文 —— AI 摘要/草稿
+基于这两样生成（够指出「哪些节可能受影响」）；「纯格式化 diff 预判抑制」需要真 diff，
+等接入 Git API 拉取后再做。tag push 按 repo 批量触发（即「基线升级」的 MVP 形态），
+AI 网关不可用时任务照建，只是没有摘要与草稿（降级不阻塞复核流程）。
 
 ## 8. 页面（7 个，UI 以 prototype/kms-prototype.html 为准）
 

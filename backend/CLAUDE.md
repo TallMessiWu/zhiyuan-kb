@@ -9,7 +9,7 @@ app/
   db.py              engine / SessionLocal / Base / get_db
   models.py          11 实体 SQLAlchemy 模型（与 docs/design.md §3 一一对应，已完整）
   schemas.py         Pydantic 请求/响应模型（与 docs/api-contract.md 对应）
-  api/               search assets feedback home gaps（已实现）· review dashboard hooks（骨架）
+  api/               search assets feedback home gaps review hooks（已实现）· ask dashboard（骨架）
   services/
     state_machine.py 五态状态机（已实现，唯一合法的状态修改入口）
     text.py          jieba 中文分词 / 索引文本 / 查询词（M2）
@@ -17,14 +17,17 @@ app/
     recall.py        双路召回（关键词/向量）+ 能力探测降级 + RRF 融合（M2）
     search.py        业务重排公式 + run_search 编排（M2）
     gaps.py          知识缺口建新/累计 + 同一需求的合并判据（M3）
-    review_queue.py  复核任务创建 + 24h 去抖合并（M3）；优先级与四选一处理仍是骨架（M4）
-    ai.py            LLM 网关：chat / embed / summarize，同步 + 超时 + 熔断降级
+    review_queue.py  复核任务创建 + 24h 去抖合并（M3）+ 优先级/AI 回填/四选一/治理过滤（M4）
+    ai.py            LLM 网关：chat / embed / summarize / impact_summary / update_draft，
+                     同步 + 超时 + 熔断降级
 tests/
   test_state_machine.py  状态机规则
   test_assets_api.py     发布/详情/流水     test_feedback_api.py  三键反馈
   test_search.py         分词·RRF·版本·重排（纯函数）
   test_search_api.py     GET /search 端到端  test_home_api.py  首页与缺口
   test_gaps_api.py       记缺口·累计·认领（M3）
+  test_hooks_api.py      webhook 签名·匹配·去抖·AI 降级（M4）
+  test_review_api.py     复核队列列表·治理过滤·四选一（M4）
   test_seed.py           种子数据一致性
 ```
 
@@ -59,13 +62,14 @@ ruff check app tests           # lint
   （`ZY_DATABASE_URL` → `settings.database_url` → env.py 注入），`alembic.ini` 的
   `sqlalchemy.url` 留空且必须保持纯 ASCII —— configparser 用系统 locale 解码，中文会崩。
 - 已实现：`POST /assets`、`GET /assets/{id}`、`GET /assets/{id}/transitions`、
-  三键反馈全部（`useful` M1 / `stale`·`not-found` M3）、`POST /gaps/{id}/claim`；
+  三键反馈全部（`useful` M1 / `stale`·`not-found` M3）、`POST /gaps/{id}/claim`、
+  `POST /hooks/git`、`GET /review`、`POST /review/{id}/resolve`（M4）；
   `main.py` 统一错误形状 `{error:{code,message}}`
-- 仍是骨架：`/ask`（M5）、review/dashboard/hooks、ai.py 的
-  impact_summary·update_draft（M4）、draft_from_session（M5，缺口认领的 AI 底稿）
+- 仍是骨架：`/ask`、`/dashboard`（M5）、ai.py 的 draft_from_session（M5，缺口认领的 AI 底稿）
 - 种子数据：`scripts/seed.py` 从 `../prototype/kms-prototype.html` 提取 18 条资产 + 4 条缺口，
-  末尾建检索索引（`--no-embeddings` 可跳过向量）
-- 测试：`pytest` 133 passed，全部走 sqlite 内存库。conftest 有个 autouse 夹具默认关掉
+  REVIEW_META 的草稿落成 AssetVersion(ai_draft) 挂到复核任务上；末尾建检索索引
+  （`--no-embeddings` 可跳过向量）
+- 测试：`pytest` 169 passed，全部走 sqlite 内存库。conftest 有个 autouse 夹具默认关掉
   AI/向量开关 —— 开发机上万一有服务监听 9000，测试结果就会随环境漂移
 
 ### M2 验收（真实 PostgreSQL 上跑过一遍才算数）
@@ -91,6 +95,16 @@ reporters 去重）、resolved 缺口不吸收新反馈、STALE/ARCHIVED 上反�
 注意：`curl` 发中文 JSON 请求体要用 `--data-binary @文件`（根 CLAUDE.md 的 Windows 坑 3）；
 另外 Git Bash 控制台按 ANSI 码页显示，中文响应看着像乱码但库里是好的 —— 别照着"修"编码。
 
+### M4 验收（真实 PostgreSQL 上跑过，2026-08-24）
+
+M4 没动表结构，不需要新迁移。验收点全部实测通过：webhook 三种签名失败姿势 401、
+GitHub push 命中 watch 路径（VERIFIED→REVIEW_DUE + `transition_trigger` 枚举往返）、
+24h 去抖合并（merged 同一 task id、REVIEW_DUE 流转只一条）、GitLab push/tag/MR 与
+GitHub PR merged 的解析、tag 按 repo 批量触发且与既有任务去抖合并、STALE 资产命中不建任务、
+网关降级（任务照建、无摘要草稿、accept_draft 409 `NO_AI_DRAFT`）、四选一各自的状态/证据/
+409 语义、accept_draft 后 pg_tsvector 立即可检索、`/home` 的 review_due 与队列同步归零。
+验证请求走 Python httpx（PowerShell 管道会给 JSON 加 BOM，`python -c` 解析会炸）。
+
 ### 写代码前值得知道的坑
 
 - **检索索引不会自己跟上**：`POST /assets` 在同一个事务里调 `indexing.refresh_doc`；
@@ -114,4 +128,11 @@ reporters 去重）、resolved 缺口不吸收新反馈、STALE/ARCHIVED 上反�
 - **计数列一律原子自增**：`reuse_count` / `hit_count` 都走 `UPDATE ... SET c = c + 1`，
   不用读改写 —— 两个并发反馈会互相覆盖，让计数和事件表长期对不上。
 - `review_queue.open_task` 返回 `(task, created)`；去抖合并时 created=False，
-  返回的是被合并进的那条已存在任务，调用方要拿它的 id 回执。
+  返回的是被合并进的那条已存在任务，调用方要拿它的 id 回执。M4 起 `priority` 省略时
+  按 `compute_priority`（近 30 天复用 × 风险系数）现算。
+- **同步 DB 调用别直接放 async 路由里**：`/hooks/git` 必须 async（要 `await request.body()`
+  才能对原始字节验签），但匹配与 AI 回填（最多两次 6s 网关往返）会阻塞事件循环，
+  所以处理主体丢 `run_in_threadpool`。其它路由保持 def（FastAPI 自动进线程池）。
+- **队列查询要求资产仍是 REVIEW_DUE**：历史数据可能有「任务 open 但资产已 STALE」的记录
+  （seed 曾如此），列出来四选一只会 409。`resolve` 也会顺带关闭同资产其它 open 任务
+  （跨去抖窗口的重复触发），别让下一个人对着已处理的资产点按钮。

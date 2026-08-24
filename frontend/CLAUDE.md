@@ -9,14 +9,14 @@ src/
   types.ts        与 backend/app/schemas.py 对齐的 TS 类型 — 后端改 schema 必须同步这里
   api/client.ts   fetch 封装（/api/v1，X-User 头）
   lib/            display（状态 pill/chip/时间）· highlight（命中词 <mark>）· markdown · users · toast
-  pages/          Home Search AssetDetail Capture（已实现）· Ask Review Dashboard（占位）
+  pages/          Home Search AssetDetail Capture Review（已实现）· Ask Dashboard（占位）
 ```
 
 ## UI 基准
 
 **一切页面布局、文案、状态标注、交互以 `../prototype/kms-prototype.html` 为准**（浏览器直接打开对照）。
-实现顺序跟随后端里程碑：M1 详情页+沉淀页 → M2 首页+搜索结果页 → **M3 反馈条+记缺口+认领（已完成）**
-→ M4 复核队列 → M5 问答+看板。
+实现顺序跟随后端里程碑：M1 详情页+沉淀页 → M2 首页+搜索结果页 → M3 反馈条+记缺口+认领
+→ **M4 复核队列（已完成）** → M5 问答+看板。
 
 关键约定（来自设计文档 §5/§6/§8）：
 - 状态 pill 固定五色语义：VERIFIED 绿 / DRAFT 石板灰(标「尚未验证」) / REVIEW-DUE 琥珀(标「可能过时」) / STALE 红 / ARCHIVED 中灰
@@ -35,7 +35,7 @@ M2 补充：
 - 首页数字条第五格「有效复用率」显示「—」：口径是看板指标，M5 才有，
   硬规则 5 禁止拿近似值冒充（详见根 CLAUDE.md）。
 - 后端还没有的按钮一律 `disabled` + `title="M4/M5 …上线后可用"`，不要渲染成可点但点了没反应。
-  M3 之后，这条只剩问答页、复核队列、看板三个占位页面适用。
+  M4 之后，这条只剩问答页、看板两个占位页面适用。
 
 M3 补充：
 
@@ -47,6 +47,17 @@ M3 补充：
 - **「内容可能过时」不展开任何输入**：说明由服务端从使用者与原状态组装。资产已是 REVIEW_DUE
   时该键 `disabled`（title 说明原因），不靠点了才报错来告知。
 - **认领就地更新那一行**，不重拉 `/home`：认领不产出资产，整页刷新只会让人以为发生了别的事。
+
+M4 补充：
+
+- **四选一的 toast 文案由后端 `resolve` 的 `note` 给**，前端不自己组装 —— 三键反馈就是这个
+  分工，两处各写一份文案迟早对不上。处理成功（或 409 发现已被别人处理）都把那行就地移除。
+- **「接受 AI 更新草稿」在 `ai_draft` 为空时 disabled** + title 说明（网关降级没生成），
+  不靠点了 409 才告知 —— 与详情页 REVIEW_DUE 时禁用「内容可能过时」同一条规则。
+- **侧栏复核角标**：App 挂载时拉一次 `/home` 的 `stats.review_due`；Review 页处理完任务
+  广播 `zy:review-changed`，App 监听重拉。不为一个数字引全局状态库。
+- diff 的两种形态都要认：seed/原型是 `add:`/`del:` 前缀行（渲染 diffline 红绿），
+  webhook 建的是 compare/PR 链接（渲染成外链）。
 
 ## 命令
 

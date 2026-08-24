@@ -57,7 +57,7 @@ npm install
 npm run dev                      # http://localhost:5173，/api 代理到 8000
 ```
 
-## 当前状态（2026-08-24 M3 完成）
+## 当前状态（2026-08-24 M4 完成）
 
 - [x] 设计定稿（docs/design.md）、原型验证通过
 - [x] **M1** backend：11 实体模型 + 状态机；Alembic 首个迁移；`POST /assets`、`GET /assets/{id}`、
@@ -78,7 +78,16 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 - [x] **M3** 在真实 PG 上验收：VERIFIED→REVIEW_DUE 流转与 `transition_trigger` 枚举往返、
       去抖合并、缺口累计（hit_count/reporters）、STALE/ARCHIVED 409、认领冲突 409 全部实测通过；
       `pytest` 133 passed（sqlite）
-- [ ] 自动更新、问答、看板仍是骨架（M4–M5）
+- [x] **M4** 自动更新闭环：`POST /hooks/git`（GitHub HMAC / GitLab token 校验；push·tag·PR merged
+      三类事件；匹配 CodeReference(watch=true)；复用 M3 `open_task` 24h 去抖契约）→ REVIEW_DUE +
+      AI 影响摘要/更新草稿（`ai.impact_summary`/`update_draft`，网关不可用任务照建）
+- [x] **M4** 复核队列：`GET /review`（priority 降序 + design.md §4 按需治理过滤）、
+      `POST /review/{id}/resolve` 四选一全走状态机；接受草稿回 DRAFT 且同事务刷新检索索引；
+      frontend 复核队列页照原型（diff 红绿行、草稿折叠、四选一、侧栏角标）
+- [x] **M4** 在真实 PG 上验收：签名 401、去抖合并、枚举往返、四选一状态/证据/409 语义、
+      降级路径（无摘要草稿 + `NO_AI_DRAFT`）、accept 后 pg_tsvector 立即可检索、tag 批量触发
+      全部实测通过；`pytest` 169 passed（sqlite）
+- [ ] 问答、看板仍是骨架（M5）
 
 ### M2 期间定下的三件事（改动别退回去）
 
@@ -103,6 +112,22 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 4. **`review_queue.open_task` 返回 `(task, created)`**：去抖合并时要把已存在的任务 id 交回给
    调用方，否则第二个反馈者只能收到「合并了」却指不出并进了哪条。M4 的 webhook 照这个契约用。
 
+### M4 期间定下的四件事（改动别退回去）
+
+1. **复核确认恢复「进入 REVIEW_DUE 前的状态」**：VERIFIED 进来的回 VERIFIED，DRAFT 进来的
+   只回 DRAFT —— 复核回答「变更是否影响了这份知识」，不判对错；从未被验证的 DRAFT 借一次
+   复核确认直达 VERIFIED 就绕过了非作者校验（硬规则 3）。状态机为此给
+   `REVIEW_DUE→DRAFT` 加了 `review_confirm` 触发器。
+2. **AI 草稿在生成时就落成 AssetVersion(created_from=ai_draft)**，任务只存 `ai_draft_version_id`，
+   接受（accept_draft）只是把 `current_version_id` 切过去 —— 版本表是不可变审计快照，
+   「生成过但没被采纳」的草稿也要留痕；confirm 掉的任务留下的草稿版本不是脏数据，别清。
+   接受后必须同事务 `indexing.refresh_doc`/`refresh_embedding`，否则更新完的正文搜不到。
+3. **webhook 对无关事件返回 200 handled=false 而不是 4xx**：GitHub/GitLab 对非 2xx 会重试，
+   报错只会让同一事件反复砸过来。签名错才是 401。payload 没有 diff 正文，AI 摘要/草稿基于
+   文件清单 + 提交说明生成；「纯格式化 diff 预判抑制」要等接入 Git API 拉真 diff。
+4. **`resolve` 顺带关闭同资产其它 open 任务**，且队列查询只列资产仍是 REVIEW_DUE 的任务 ——
+   两道防线防的是同一件事：不让人对着已处理完的资产点四选一收 409。
+
 ### M1 期间发现并修掉的两个 PG 专属问题（改动别退回去）
 
 1. `KnowledgeAsset.current_version_id` ↔ `AssetVersion.asset_id` 是环形外键，必须 `use_alter`，
@@ -113,9 +138,10 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 ## 下一步 Backlog（按序执行）
 
 - ~~**M3 反馈闭环**~~：已完成（2026-08-24）。
-- **M4 自动更新**：GitHub/GitLab webhook → CodeReference 匹配（24h 去抖）→ REVIEW-DUE +
-  AI diff 摘要/草稿（`services/ai.py`）；复核队列四选一 API。
-- **M5 问答与看板**：RAG 问答（引用/无据明说/冲突并列，规则见 design.md §6）；看板 7 指标由事件表实时聚合。
+- ~~**M4 自动更新**~~：已完成（2026-08-24）。遗留到 V1.1：接 Git API 拉真 diff
+  （AI 摘要现基于文件清单 + 提交说明）、纯格式化 diff 预判抑制。
+- **M5 问答与看板**：RAG 问答（引用/无据明说/冲突并列，规则见 design.md §6）；看板 7 指标由事件表实时聚合；
+  `ai.draft_from_session`（缺口认领的 AI 底稿）。
 
 每个 M 完成后：对照 `prototype/kms-prototype.html` 的对应页面做 UI 验收。
 
