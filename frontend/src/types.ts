@@ -273,6 +273,51 @@ export interface GapOut {
   claimed_by: string;
 }
 
+/* ---------- 复核队列（GET /review · POST /review/{id}/resolve，M4） ---------- */
+
+/** ReviewTask.trigger 里会出现的三种（全集是 Trigger 枚举，进队列的只有这三类流转） */
+export type ReviewTrigger = "code_change" | "version_change" | "user_feedback";
+export type ReviewAction = "confirm" | "accept_draft" | "stale" | "archive";
+
+export const REVIEW_TRIGGER_ZH: Record<ReviewTrigger, string> = {
+  code_change: "代码变更",
+  version_change: "版本变更",
+  user_feedback: "人工反馈",
+};
+
+export interface ReviewTaskOut {
+  id: number;
+  asset: AssetBrief;
+  trigger: ReviewTrigger;
+  trigger_detail: string;
+  /** seed/原型数据是 "add:/del:" 前缀的 diff 行；webhook 建的是 compare/PR 链接 */
+  diff_ref: string;
+  /** 空串 = 网关降级没生成（不渲染该块） */
+  ai_impact_summary: string;
+  ai_draft_version_id: number | null;
+  /** 草稿正文；空串 = 没有草稿（「接受 AI 更新草稿」按钮 disabled，后端也会 409） */
+  ai_draft: string;
+  priority: number;
+  priority_label: "高" | "中" | "低";
+  usage_30d: number;
+  created_at: string;
+}
+
+export interface ReviewListOut {
+  items: ReviewTaskOut[];
+  total: number;
+}
+
+/** 四选一处理结果；note 是给 toast 的结果说明，后端已按原型文案组装 */
+export interface ReviewResolveOut {
+  task_id: number;
+  action: ReviewAction;
+  asset_id: number;
+  status: Status;
+  current_version_id: number | null;
+  note: string;
+}
+
 /** 首页「最近验证」：资产 + 这次验证的证据 */
 export interface RecentValidation {
   asset: AssetBrief;

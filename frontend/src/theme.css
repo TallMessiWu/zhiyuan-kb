@@ -195,3 +195,24 @@ button.chip.mono{font-family:var(--mono)}
 .gap-item:last-child{border-bottom:none}
 .gap-item .q{font-size:12.8px;font-weight:500}
 .gap-item .m{font-size:11px;color:var(--ink3);margin-top:2px}
+
+/* ---------- M4：复核队列（原型 205–215、229 行；原型行内样式提为 rev-* 类） ---------- */
+.rev-item{border:1px solid var(--border);border-radius:7px;background:var(--surface);margin-bottom:14px;overflow:hidden}
+.rev-h{padding:12px 16px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.rev-b{padding:12px 16px}
+.rev-trigger{font-size:11.5px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:3px;padding:1px 8px;font-weight:500;white-space:nowrap}
+.rev-h .rev-title{font-weight:600}
+.rev-h .rev-right{margin-left:auto}
+/* 触发详情可能带去抖合并的多行「[合并] …」记录，保留换行 */
+.rev-detail{font-size:12.5px;color:var(--ink2);margin-bottom:8px;white-space:pre-line}
+.rev-ai{font-size:12.5px;line-height:1.75}
+.rev-diff{margin-top:8px;border:1px solid var(--border);border-radius:5px;overflow-x:auto;padding:6px 4px;background:var(--surface2)}
+.rev-difflink{margin-top:8px;font-size:12px}
+.diffline{font-family:var(--mono);font-size:11.5px;line-height:1.75;padding:1px 8px;border-radius:2px;white-space:pre-wrap;word-break:break-all}
+.diffline.add{background:var(--ok-bg);color:var(--ok)}
+.diffline.del{background:var(--bad-bg);color:var(--bad)}
+.rev-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px dashed var(--border2)}
+details.draftbox{border:1px solid var(--border);border-radius:6px;background:var(--surface2);margin-top:10px}
+details.draftbox summary{padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink2)}
+details.draftbox .inner{padding:2px 14px 12px;font-size:12.5px;line-height:1.75;border-top:1px solid var(--border);white-space:pre-wrap}
+.footnote{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.7}
