@@ -57,7 +57,7 @@ npm install
 npm run dev                      # http://localhost:5173，/api 代理到 8000
 ```
 
-## 当前状态（2026-08-21 M2 完成）
+## 当前状态（2026-08-24 M3 完成）
 
 - [x] 设计定稿（docs/design.md）、原型验证通过
 - [x] **M1** backend：11 实体模型 + 状态机；Alembic 首个迁移；`POST /assets`、`GET /assets/{id}`、
@@ -71,7 +71,14 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 - [x] **M2** `GET /home`、`GET /gaps`（只读）；前端首页与搜索结果页对齐原型
 - [x] **M2** 在真实 PG 上验收：中文查询、字段权重、状态可信度、历史隔离、显式/推断筛选、
       pgvector `<=>` + HNSW 全部实测通过；`pytest` 103 passed（sqlite）
-- [ ] 反馈闭环、自动更新、问答、看板仍是骨架（M3–M5）
+- [x] **M3** 三键反馈闭环打通：`POST /feedback/stale`（→ ReviewTask + REVIEW_DUE，24h 去抖合并）、
+      `POST /feedback/not-found`（→ KnowledgeGap 建新/累计）、`POST /gaps/{id}/claim`（认领登记）
+- [x] **M3** frontend：详情页三键全部接通、搜索页两处「记录知识缺口」、首页「认领并生成草稿」；
+      toast 收敛为 `lib/toast.tsx` 一份
+- [x] **M3** 在真实 PG 上验收：VERIFIED→REVIEW_DUE 流转与 `transition_trigger` 枚举往返、
+      去抖合并、缺口累计（hit_count/reporters）、STALE/ARCHIVED 409、认领冲突 409 全部实测通过；
+      `pytest` 133 passed（sqlite）
+- [ ] 自动更新、问答、看板仍是骨架（M4–M5）
 
 ### M2 期间定下的三件事（改动别退回去）
 
@@ -84,6 +91,18 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 3. **两路召回都必须能降级**，且降级要随响应返回（`recall` 字段）。判断可用性的顺序是
    「方言 → 列在不在 → 网关这次通不通」，任何一环失败都只影响那一路，不影响搜索可用性。
 
+### M3 期间定下的四件事（改动别退回去）
+
+1. **缺口合并不用 embedding**：判据是 jieba 词集合（Jaccard ≥ `ZY_GAP_MERGE_SIMILARITY`，
+   或短侧整体落在长侧且 ≥2 词），实现在 `services/gaps.py`。累计发生在写路径上，
+   不能挂在会超时/会熔断的网关上；词集合还让 PG 与 sqlite 行为一致，测试不必依赖 PG。
+2. **缺口问句照搜索词原样存**，不套「关于「X」的可用知识」这类壳子 —— 壳子词（可用/知识/关于）
+   会进词集合，把互不相干的短查询系统性地拉相似，合并判据直接失真。
+3. **认领不产出资产**：`/gaps/{id}/claim` 只登记「我来写」（status=claimed + claimed_by）。
+   原型的文案也只承诺「AI 将…生成草稿底稿」；真的生成要等 `ai.draft_from_session`（M5）。
+4. **`review_queue.open_task` 返回 `(task, created)`**：去抖合并时要把已存在的任务 id 交回给
+   调用方，否则第二个反馈者只能收到「合并了」却指不出并进了哪条。M4 的 webhook 照这个契约用。
+
 ### M1 期间发现并修掉的两个 PG 专属问题（改动别退回去）
 
 1. `KnowledgeAsset.current_version_id` ↔ `AssetVersion.asset_id` 是环形外键，必须 `use_alter`，
@@ -93,8 +112,7 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 
 ## 下一步 Backlog（按序执行）
 
-- **M3 反馈闭环**：补 `POST /feedback/stale`、`POST /feedback/not-found`
-  → ReviewTask/KnowledgeGap；`useful` 已在 M1 落地。
+- ~~**M3 反馈闭环**~~：已完成（2026-08-24）。
 - **M4 自动更新**：GitHub/GitLab webhook → CodeReference 匹配（24h 去抖）→ REVIEW-DUE +
   AI diff 摘要/草稿（`services/ai.py`）；复核队列四选一 API。
 - **M5 问答与看板**：RAG 问答（引用/无据明说/冲突并列，规则见 design.md §6）；看板 7 指标由事件表实时聚合。

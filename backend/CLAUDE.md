@@ -16,13 +16,15 @@ app/
     indexing.py      检索索引维护：分词文档 + 向量回填（M2）
     recall.py        双路召回（关键词/向量）+ 能力探测降级 + RRF 融合（M2）
     search.py        业务重排公式 + run_search 编排（M2）
-    review_queue.py  复核任务创建/去抖/优先级（骨架）
+    gaps.py          知识缺口建新/累计 + 同一需求的合并判据（M3）
+    review_queue.py  复核任务创建 + 24h 去抖合并（M3）；优先级与四选一处理仍是骨架（M4）
     ai.py            LLM 网关：chat / embed / summarize，同步 + 超时 + 熔断降级
 tests/
   test_state_machine.py  状态机规则
   test_assets_api.py     发布/详情/流水     test_feedback_api.py  三键反馈
   test_search.py         分词·RRF·版本·重排（纯函数）
   test_search_api.py     GET /search 端到端  test_home_api.py  首页与缺口
+  test_gaps_api.py       记缺口·累计·认领（M3）
   test_seed.py           种子数据一致性
 ```
 
@@ -57,12 +59,13 @@ ruff check app tests           # lint
   （`ZY_DATABASE_URL` → `settings.database_url` → env.py 注入），`alembic.ini` 的
   `sqlalchemy.url` 留空且必须保持纯 ASCII —— configparser 用系统 locale 解码，中文会崩。
 - 已实现：`POST /assets`、`GET /assets/{id}`、`GET /assets/{id}/transitions`、
-  `POST /feedback/useful`；`main.py` 统一错误形状 `{error:{code,message}}`
-- 仍是骨架：`/ask`（M5）、feedback 的 stale·not-found（M3）、`/gaps/{id}/claim`、
-  review/dashboard/hooks、ai.py 的 draft_from_session·impact_summary·update_draft（M4）
+  三键反馈全部（`useful` M1 / `stale`·`not-found` M3）、`POST /gaps/{id}/claim`；
+  `main.py` 统一错误形状 `{error:{code,message}}`
+- 仍是骨架：`/ask`（M5）、review/dashboard/hooks、ai.py 的
+  impact_summary·update_draft（M4）、draft_from_session（M5，缺口认领的 AI 底稿）
 - 种子数据：`scripts/seed.py` 从 `../prototype/kms-prototype.html` 提取 18 条资产 + 4 条缺口，
   末尾建检索索引（`--no-embeddings` 可跳过向量）
-- 测试：`pytest` 103 passed，全部走 sqlite 内存库。conftest 有个 autouse 夹具默认关掉
+- 测试：`pytest` 133 passed，全部走 sqlite 内存库。conftest 有个 autouse 夹具默认关掉
   AI/向量开关 —— 开发机上万一有服务监听 9000，测试结果就会随环境漂移
 
 ### M2 验收（真实 PostgreSQL 上跑过一遍才算数）
@@ -76,6 +79,17 @@ python -m uvicorn app.main:app --reload
 验收点：中文查询召回、字段权重（标题命中 > 正文命中）、VERIFIED 压过 DRAFT、
 REVIEW_DUE −10 仍可见、STALE/ARCHIVED 只在 `hist=1` 出现、显式 framework 硬过滤 vs
 查询里推断的框架 ±6/−8、`recall` 字段如实反映降级。
+
+### M3 验收（同样在真实 PostgreSQL 上跑过）
+
+M3 没动表结构，不需要新迁移。验收点（2026-08-24 实测通过）：
+VERIFIED→REVIEW_DUE 流转 + `transition_trigger` 枚举往返、24h 内第二次反馈合并进同一条
+ReviewTask（`merged=true` 且返回同一个 task id）、缺口按同一需求累计（hit_count+1、
+reporters 去重）、resolved 缺口不吸收新反馈、STALE/ARCHIVED 上反馈 409 `ASSET_NOT_ACTIVE`、
+他人重复认领 409 `GAP_ALREADY_CLAIMED`、编错 `search_event_id` 422。
+
+注意：`curl` 发中文 JSON 请求体要用 `--data-binary @文件`（根 CLAUDE.md 的 Windows 坑 3）；
+另外 Git Bash 控制台按 ANSI 码页显示，中文响应看着像乱码但库里是好的 —— 别照着"修"编码。
 
 ### 写代码前值得知道的坑
 
@@ -94,3 +108,10 @@ REVIEW_DUE −10 仍可见、STALE/ARCHIVED 只在 `hist=1` 出现、显式 fram
   序列化结果差一个 `Z`。PG 的 timestamptz 会原样往返。测试里比较时间串要注意。
 - `updated_at` 带 `onupdate`：只有显式赋值才不会被刷成当前时间（种子回填历史时间靠这点）。
 - `transition()` / `create_as_draft()` 的 `at` 参数只给种子回填用，线上路径一律省略。
+- **JSON 列改了不会自己入库**：`KnowledgeGap.reporters` 是普通 JSON 列，没挂 Mutable 追踪，
+  `gap.reporters.append(x)` 改的是同一个 list 对象，SQLAlchemy 看不见、不会发 UPDATE。
+  必须整体赋新值（见 `services/gaps.py::record`）。
+- **计数列一律原子自增**：`reuse_count` / `hit_count` 都走 `UPDATE ... SET c = c + 1`，
+  不用读改写 —— 两个并发反馈会互相覆盖，让计数和事件表长期对不上。
+- `review_queue.open_task` 返回 `(task, created)`；去抖合并时 created=False，
+  返回的是被合并进的那条已存在任务，调用方要拿它的 id 回执。

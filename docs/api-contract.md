@@ -33,8 +33,17 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/feedback/useful` | {asset_id, task_note?, search_event_id?} → 建 ReuseEvent(success)；若资产 DRAFT 且 user≠author → 自动升 VERIFIED |
-| POST | `/feedback/stale` | {asset_id, note?} → 置 REVIEW_DUE + 建 ReviewTask(user_feedback) |
-| POST | `/feedback/not-found` | {query, search_event_id?} → 建/累计 KnowledgeGap |
+| POST | `/feedback/stale` | {asset_id, note?} → UserFeedback(maybe_stale) + ReviewTask(user_feedback) + 置 REVIEW_DUE。返回 `{feedback_id, asset_id, status, review_task_id, merged, note}` |
+| POST | `/feedback/not-found` | {query, search_event_id?} → UserFeedback(not_found) + 建/累计 KnowledgeGap。返回 `{feedback_id, gap, created}` |
+
+反馈细则：
+
+- `search_event_id` 传了就必须存在（否则 422）—— 它是看板把「需求事件」和「复用/缺口」对上的唯一线索。
+- `stale`：24h 去抖窗口内同资产的重复反馈并进同一条 ReviewTask（`merged=true`，不新建、不重复流转）；
+  资产已是 STALE/ARCHIVED 时返回 409 `ASSET_NOT_ACTIVE` —— 死状态不进复核队列。
+- `not-found`：同一个需求累计到同一条缺口（`created=false`，hit_count+1、reporters 去重并集），
+  判据见 `backend/app/services/gaps.py`；`query` 留空按「（无关键词浏览）」记。
+  已 resolved 的缺口不吸收新反馈 —— 那说明是搜不到而不是缺知识，另开一条。
 
 ## 复核队列
 
@@ -47,7 +56,7 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/gaps` · POST `/gaps/{id}/claim` | 列表（open 优先、按 hit_count 降序，resolved 不返回）/ 认领（认领后 AI 生成 DRAFT 底稿） |
+| GET | `/gaps` · POST `/gaps/{id}/claim` | 列表（open 优先、按 hit_count 降序，resolved 不返回）/ 认领 → status=claimed + claimed_by，返回 GapOut。同一人重复认领幂等；已被他人认领 409 `GAP_ALREADY_CLAIMED`，已解决 409 `GAP_RESOLVED`。认领只是登记「我来写」，不产出资产 —— AI 底稿等 `ai.draft_from_session`（M5） |
 | GET | `/home` | 首页一屏：`{stats{total,verified,review_due,open_gaps}, recent_validated[{asset,validator_id,note,at}], hot[asset], gaps[]}`。与 `/dashboard` 不是一回事 —— 那边是带口径的 7 指标，这边只是首屏展示数据 |
 | GET | `/dashboard` | 7 指标：reuse_rate{num,den,trend[]}, search_ok, not_found_30d, review_backlog, verified_count, rework_hours_trend[], coverage[direction][status] |
 
