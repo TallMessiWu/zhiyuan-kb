@@ -2,7 +2,17 @@
 
 对应硬规则 1/3：AI 与自动路径不产出可信状态；升级证据必须来自非作者。
 """
-from app.models import KnowledgeAsset, ReuseEvent, Status, StatusTransition, UserFeedback, ValidationRecord
+from app.models import (
+    KnowledgeAsset,
+    ReuseEvent,
+    ReviewTask,
+    Status,
+    StatusTransition,
+    Trigger,
+    UserFeedback,
+    ValidationRecord,
+)
+from app.services import state_machine
 
 from .conftest import publish
 
@@ -109,3 +119,99 @@ def test_oversized_x_user_rejected_with_422(client):
     resp = client.post("/api/v1/feedback/useful", json={"asset_id": asset_id},
                        headers={"X-User": "u" * 65})
     assert resp.status_code == 422
+
+
+# ---------- POST /feedback/stale（M3）：一次点击把资产送进复核队列 ----------
+
+def _stale(client, asset_id, user, note="", expect=200):
+    resp = client.post(
+        "/api/v1/feedback/stale",
+        json={"asset_id": asset_id, "note": note},
+        headers={"X-User": user},
+    )
+    assert resp.status_code == expect, resp.text
+    return resp.json()
+
+
+def test_stale_moves_verified_asset_to_review_due(client, db):
+    asset_id = publish(client, user="chenyuwei")["id"]
+    _useful(client, asset_id, user="wanglei")                    # 先升到 VERIFIED
+
+    out = _stale(client, asset_id, user="sunxiaodong", note="0.10 起 EP 配置改成一级参数")
+
+    assert out["status"] == "REVIEW_DUE" and out["merged"] is False
+    asset = db.get(KnowledgeAsset, asset_id)
+    db.refresh(asset)
+    assert asset.status is Status.REVIEW_DUE
+
+    task = db.query(ReviewTask).filter_by(asset_id=asset_id).one()
+    assert task.id == out["review_task_id"]
+    assert task.trigger is Trigger.user_feedback and task.state == "open"
+    assert "sunxiaodong" in task.trigger_detail and "EP 配置" in task.trigger_detail
+
+    fb = db.query(UserFeedback).filter_by(asset_id=asset_id, kind="maybe_stale").one()
+    assert fb.user_id == "sunxiaodong"
+
+    # 审计流水：→DRAFT →VERIFIED →REVIEW_DUE，最后一条的证据指向复核任务
+    rows = db.query(StatusTransition).filter_by(asset_id=asset_id).order_by(StatusTransition.id).all()
+    assert [r.to_status for r in rows] == [Status.DRAFT, Status.VERIFIED, Status.REVIEW_DUE]
+    assert rows[2].trigger is Trigger.user_feedback
+    assert rows[2].evidence_type == "review_task" and rows[2].evidence_id == task.id
+    assert rows[2].actor == "sunxiaodong"
+    assert asset.status_reason and "内容可能过时" in asset.status_reason
+
+
+def test_stale_on_draft_also_opens_task(client, db):
+    """DRAFT 同样能被反馈过时 —— 状态机允许 DRAFT→REVIEW_DUE（design.md §4）。"""
+    asset_id = publish(client, user="chenyuwei")["id"]
+
+    out = _stale(client, asset_id, user="wanglei")
+
+    assert out["status"] == "REVIEW_DUE"
+    assert db.query(ReviewTask).filter_by(asset_id=asset_id).count() == 1
+
+
+def test_second_stale_within_debounce_window_merges_into_one_task(client, db):
+    """同一份资产被两个人先后反馈，队列里只能有一条任务（24h 去抖）。"""
+    asset_id = publish(client, user="chenyuwei")["id"]
+    first = _stale(client, asset_id, user="wanglei", note="命令跑不通")
+
+    second = _stale(client, asset_id, user="lihao", note="参数名变了")
+
+    assert second["merged"] is True
+    assert second["review_task_id"] == first["review_task_id"]
+    assert "已在复核队列" in second["note"]
+
+    task = db.query(ReviewTask).filter_by(asset_id=asset_id).one()   # 仍然只有一条
+    assert "[合并]" in task.trigger_detail and "lihao" in task.trigger_detail
+    # 两次反馈都留了事件；状态只流转了一次
+    assert db.query(UserFeedback).filter_by(asset_id=asset_id, kind="maybe_stale").count() == 2
+    assert db.query(StatusTransition).filter_by(
+        asset_id=asset_id, to_status=Status.REVIEW_DUE).count() == 1
+
+
+def test_stale_on_archived_asset_409(client, db):
+    asset_id = publish(client, user="chenyuwei")["id"]
+    asset = db.get(KnowledgeAsset, asset_id)
+    state_machine.transition(db, asset, Status.ARCHIVED, Trigger.review_replace,
+                             actor="wanglei", note="被 KA-002 替代")
+    db.commit()
+
+    body = _stale(client, asset_id, user="wanglei", expect=409)
+
+    assert body["error"]["code"] == "ASSET_NOT_ACTIVE"
+    assert db.query(ReviewTask).filter_by(asset_id=asset_id).count() == 0
+
+
+def test_stale_on_unknown_asset_404(client):
+    body = _stale(client, 9999, user="wanglei", expect=404)
+    assert body["error"]["code"] == "NOT_FOUND"
+
+
+def test_feedback_with_unknown_search_event_422(client):
+    """search_event_id 是外键，编错了不能变成 500。"""
+    asset_id = publish(client, user="chenyuwei")["id"]
+    resp = client.post("/api/v1/feedback/useful",
+                       json={"asset_id": asset_id, "search_event_id": 4242},
+                       headers={"X-User": "wanglei"})
+    assert resp.status_code == 422 and resp.json()["error"]["code"] == "VALIDATION_ERROR"

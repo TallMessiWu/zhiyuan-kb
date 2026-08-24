@@ -24,10 +24,18 @@ def open_task(
     trigger: Trigger,
     *,
     trigger_detail: str,
+    actor: str = "system",
     diff_ref: str = "",
     priority: int = 0,
-) -> ReviewTask | None:
-    """将资产置 REVIEW_DUE 并建任务。同资产在去抖窗口内已有 open 任务则合并（返回 None）。"""
+) -> tuple[ReviewTask, bool]:
+    """将资产置 REVIEW_DUE 并建任务。返回 (任务, 是否新建)。
+
+    同资产在去抖窗口内已有 open 任务时不新建，只把这次的触发说明并进那条任务
+    （created=False）—— 一次代码变更命中多个 watch 路径、或几个人先后反馈同一份资产
+    过时，都不该在队列里堆出几条要人分别处理的任务。
+
+    资产已是 REVIEW_DUE（或 STALE/ARCHIVED）时不再流转状态，只挂任务。
+    """
     window = utcnow() - timedelta(hours=settings.review_debounce_hours)
     existing = db.scalar(
         select(ReviewTask).where(
@@ -38,7 +46,8 @@ def open_task(
     )
     if existing:
         existing.trigger_detail = f"{existing.trigger_detail}\n[合并] {trigger_detail}"
-        return None
+        db.flush()
+        return existing, False
 
     task = ReviewTask(
         asset_id=asset.id, trigger=trigger, trigger_detail=trigger_detail,
@@ -48,10 +57,10 @@ def open_task(
     db.flush()
     if asset.status in (Status.DRAFT, Status.VERIFIED):
         state_machine.transition(
-            db, asset, Status.REVIEW_DUE, trigger,
+            db, asset, Status.REVIEW_DUE, trigger, actor=actor,
             evidence_type="review_task", evidence_id=task.id, note=trigger_detail,
         )
-    return task
+    return task, True
 
 
 # TODO(M4): compute_priority(asset) = 近30天复用次数 × 风险系数(core=3, 高风险标签=2, 其他=1)

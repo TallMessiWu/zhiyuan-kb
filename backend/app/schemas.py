@@ -215,8 +215,19 @@ class StaleIn(BaseModel):
     note: str = Field(default="", max_length=500)
 
 
+class StaleOut(BaseModel):
+    """「内容可能过时」的结果。merged=True 表示并进了去抖窗口内已存在的复核任务。"""
+
+    feedback_id: int
+    asset_id: int
+    status: Status
+    review_task_id: int
+    merged: bool = False
+    note: str = ""
+
+
 class NotFoundIn(BaseModel):
-    query: str = Field(max_length=500)
+    query: str = Field(default="", max_length=500)
     search_event_id: int | None = None
 
 
@@ -266,6 +277,17 @@ class GapOut(BaseModel):
     @property
     def code(self) -> str:
         return f"GAP-{self.id:02d}"
+
+
+class NotFoundOut(BaseModel):
+    """「没有找到答案」的结果。created=False 表示并入了同一需求的已有缺口。
+
+    定义在这里而不是跟另外两键放一起：它要嵌 GapOut，得等 GapOut 先定义。
+    """
+
+    feedback_id: int
+    gap: GapOut
+    created: bool
 
 
 class RecentValidation(BaseModel):

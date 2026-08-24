@@ -17,6 +17,11 @@ class Settings(BaseSettings):
     review_debounce_hours: int = 24
     governance_usage_days: int = 90
 
+    # 知识缺口的合并阈值（M3）：两条「没有找到答案」的问句词集合 Jaccard 达到多少算同一个需求。
+    # 0.5 是折中值 —— 再低会把「vllm-ascend 部署」和「sglang 部署」并成一条，
+    # 再高则同义改写（「PD 分离」/「Prefill Decode 分离」）合不上。判据细节见 services/gaps.py。
+    gap_merge_similarity: float = 0.5
+
     # ---- 检索（M2，见 docs/design.md §5） ----
     # 两路召回各取多少条进 RRF。
     # RRF 的 k 越大越平滑：论文里的 60 是给 TREC 那种上千条的长列表用的，放在这里会把
