@@ -9,14 +9,14 @@ src/
   types.ts        与 backend/app/schemas.py 对齐的 TS 类型 — 后端改 schema 必须同步这里
   api/client.ts   fetch 封装（/api/v1，X-User 头）
   lib/            display（状态 pill/chip/时间）· highlight（命中词 <mark>）· markdown · users · toast
-  pages/          Home Search AssetDetail Capture Review（已实现）· Ask Dashboard（占位）
+  pages/          Home Search AssetDetail Capture Review Ask Dashboard（七页全部已实现）
 ```
 
 ## UI 基准
 
 **一切页面布局、文案、状态标注、交互以 `../prototype/kms-prototype.html` 为准**（浏览器直接打开对照）。
 实现顺序跟随后端里程碑：M1 详情页+沉淀页 → M2 首页+搜索结果页 → M3 反馈条+记缺口+认领
-→ **M4 复核队列（已完成）** → M5 问答+看板。
+→ M4 复核队列 → **M5 问答+看板（已完成 —— 七页面全部落地，MVP 前端交付）**。
 
 关键约定（来自设计文档 §5/§6/§8）：
 - 状态 pill 固定五色语义：VERIFIED 绿 / DRAFT 石板灰(标「尚未验证」) / REVIEW-DUE 琥珀(标「可能过时」) / STALE 红 / ARCHIVED 中灰
@@ -32,10 +32,11 @@ M2 补充：
 - 高亮词由后端给（`SearchResponse.terms`，已滤掉单字），前端只负责套 `<mark>`；
   用 `lib/highlight.tsx` 的组件而不是 `dangerouslySetInnerHTML`。
 - 结果行的模型/框架/版本来自 `AssetBrief`（后端批量查好），不要为每条结果再拉一次详情。
-- 首页数字条第五格「有效复用率」显示「—」：口径是看板指标，M5 才有，
-  硬规则 5 禁止拿近似值冒充（详见根 CLAUDE.md）。
-- 后端还没有的按钮一律 `disabled` + `title="M4/M5 …上线后可用"`，不要渲染成可点但点了没反应。
-  M4 之后，这条只剩问答页、看板两个占位页面适用。
+- 首页数字条第五格「有效复用率」：M5 起接真数（`stats.reuse_rate`，与看板同口径）；
+  `pct=null`（分母为 0）显示「—」——「没人有需求」和「有需求没人复用」是两码事，
+  不许显示成 0%（硬规则 5）。
+- ~~后端还没有的按钮一律 `disabled` 占位~~：**该规则 M5 退役** —— 已无占位页面。
+  留给后人的形式是：新增页面时若后端未就绪，恢复这条规则。
 
 M3 补充：
 
@@ -58,6 +59,24 @@ M4 补充：
   广播 `zy:review-changed`，App 监听重拉。不为一个数字引全局状态库。
 - diff 的两种形态都要认：seed/原型是 `add:`/`del:` 前缀行（渲染 diffline 红绿），
   webhook 建的是 compare/PR 链接（渲染成外链）。
+
+M5 补充：
+
+- **问答条目是五态的**：进行中（「正在检索并生成…」，生成要 10–40s）/ 正常回答 /
+  not_found（固定话术 + 一键记缺口，带 `search_event_id`）/ 冲突并列 / 「问答暂不可用」
+  （503 `AI_UNAVAILABLE` 渲染成条目而不是报错弹窗 —— 它是明确语义：检索与浏览不受影响）。
+  提问期间整页 `busy`（按钮「生成中…」），不允许并发提问。
+- **预置问题是真链路**：`PRESET_QUESTIONS` 只是把问句填进真 `/ask`，不携带任何写死的答案
+  （原型的 QA_PRESETS 带答案是内存演示）。
+- **风险块由后端组装**：`risks[].text`/`ai_impact_summary` 原样渲染，前端只补「前往复核
+  队列 →」链接 —— 与三键/四选一的 toast 同一分工，文案不写两份。
+- **看板 den=0 显示「—」**（`BigPct`），估算指标（重复工时）文案里必须保留「估算值，
+  仅看趋势」——响应里 `rework_hours_estimated` 就是干这个的。趋势条全 0 时 max 取 1 防除 0。
+- **认领跳沉淀页带 `location.state`**（gapId/gapCode/question/draftOut）：底稿 503 时
+  `draftOut=null` 照样跳（认领已生效，作者手写），沉淀页据此切换文案。沉淀页无 state
+  时保持原型演示数据（真会话接入是 V1.1）。发布 payload 带 `gap_id`，成功即缺口闭环。
+- `lib/markdown.ts` 支持六种语法（M5 加了 `**强调**` 与一级 `- ` 列表 —— 问答回答里
+  LLM 高频使用）；仍然先整体转义再套标签，`dangerouslySetInnerHTML` 才是安全的。
 
 ## 命令
 

@@ -9,7 +9,7 @@ app/
   db.py              engine / SessionLocal / Base / get_db
   models.py          11 实体 SQLAlchemy 模型（与 docs/design.md §3 一一对应，已完整）
   schemas.py         Pydantic 请求/响应模型（与 docs/api-contract.md 对应）
-  api/               search assets feedback home gaps review hooks（已实现）· ask dashboard（骨架）
+  api/               search assets feedback home gaps review hooks ask dashboard（全部已实现）
   services/
     state_machine.py 五态状态机（已实现，唯一合法的状态修改入口）
     text.py          jieba 中文分词 / 索引文本 / 查询词（M2）
@@ -18,8 +18,10 @@ app/
     search.py        业务重排公式 + run_search 编排（M2）
     gaps.py          知识缺口建新/累计 + 同一需求的合并判据（M3）
     review_queue.py  复核任务创建 + 24h 去抖合并（M3）+ 优先级/AI 回填/四选一/治理过滤（M4）
-    ai.py            LLM 网关：chat / embed / summarize / impact_summary / update_draft，
-                     同步 + 超时 + 熔断降级
+    ask.py           RAG 问答：按 rel 选候选 + 约束生成 + 引用逐字校验 + 风险回填（M5）
+    metrics.py       看板 7 指标聚合：需求会话去重/复用率/搜索成功率/工时估算（M5）
+    ai.py            LLM 网关：chat / embed / summarize / impact_summary / update_draft /
+                     draft_from_session，同步 + 双档超时 + 按端点熔断降级 + API key（M5-0）
 tests/
   test_state_machine.py  状态机规则
   test_assets_api.py     发布/详情/流水     test_feedback_api.py  三键反馈
@@ -28,6 +30,10 @@ tests/
   test_gaps_api.py       记缺口·累计·认领（M3）
   test_hooks_api.py      webhook 签名·匹配·去抖·AI 降级（M4）
   test_review_api.py     复核队列列表·治理过滤·四选一（M4）
+  test_ask_api.py        问答五规则·降级 503·qa 事件（M5）
+  test_dashboard_api.py  会话去重·口径对账·估算自报（M5）
+  test_gap_draft_api.py  底稿前置条件·清洗·发布回链（M5）
+  test_ai_gateway.py     Bearer 头·端点分离·熔断隔离·双档超时（M5-0）
   test_seed.py           种子数据一致性
 ```
 
@@ -61,16 +67,18 @@ ruff check app tests           # lint
 - Alembic 已接：`alembic/` + 首个迁移 `562da9d71450`。连接串只有一个来源
   （`ZY_DATABASE_URL` → `settings.database_url` → env.py 注入），`alembic.ini` 的
   `sqlalchemy.url` 留空且必须保持纯 ASCII —— configparser 用系统 locale 解码，中文会崩。
-- 已实现：`POST /assets`、`GET /assets/{id}`、`GET /assets/{id}/transitions`、
-  三键反馈全部（`useful` M1 / `stale`·`not-found` M3）、`POST /gaps/{id}/claim`、
-  `POST /hooks/git`、`GET /review`、`POST /review/{id}/resolve`（M4）；
-  `main.py` 统一错误形状 `{error:{code,message}}`
-- 仍是骨架：`/ask`、`/dashboard`（M5）、ai.py 的 draft_from_session（M5，缺口认领的 AI 底稿）
+- 已实现：`POST /assets`（M5 起支持 `gap_id` 回链）、`GET /assets/{id}`、
+  `GET /assets/{id}/transitions`、三键反馈全部（`useful` M1 / `stale`·`not-found` M3）、
+  `POST /gaps/{id}/claim`、`POST /hooks/git`、`GET /review`、`POST /review/{id}/resolve`（M4）、
+  `POST /ask`、`GET /dashboard`、`POST /gaps/{id}/draft`（M5）；
+  `main.py` 统一错误形状 `{error:{code,message}}`。**API 骨架已无 —— MVP 接口全部落地**
 - 种子数据：`scripts/seed.py` 从 `../prototype/kms-prototype.html` 提取 18 条资产 + 4 条缺口，
   REVIEW_META 的草稿落成 AssetVersion(ai_draft) 挂到复核任务上；末尾建检索索引
   （`--no-embeddings` 可跳过向量）
-- 测试：`pytest` 169 passed，全部走 sqlite 内存库。conftest 有个 autouse 夹具默认关掉
-  AI/向量开关 —— 开发机上万一有服务监听 9000，测试结果就会随环境漂移
+- 测试：`pytest` 211 passed，全部走 sqlite 内存库。conftest 有个 autouse 夹具默认关掉
+  AI/向量开关 —— 开发机上万一有服务监听 9000，测试结果就会随环境漂移。问答/底稿测试
+  直接 monkeypatch `ai.chat` 整个函数（不受开关影响）；降级用例什么都不打，开关关着
+  chat 返回 None 就是网关不可用
 
 ### M2 验收（真实 PostgreSQL 上跑过一遍才算数）
 
@@ -104,6 +112,31 @@ GitHub PR merged 的解析、tag 按 repo 批量触发且与既有任务去抖�
 网关降级（任务照建、无摘要草稿、accept_draft 409 `NO_AI_DRAFT`）、四选一各自的状态/证据/
 409 语义、accept_draft 后 pg_tsvector 立即可检索、`/home` 的 review_due 与队列同步归零。
 验证请求走 Python httpx（PowerShell 管道会给 JSON 加 BOM，`python -c` 解析会炸）。
+
+### M5 验收（真实 PostgreSQL + 真实公有云网关，2026-08-25）
+
+M5 没动表结构，不需要新迁移。网关配置写本地 `backend/.env`（不进 git）：chat 走 DeepSeek
+`deepseek-v4-flash`，embedding 走 SiliconFlow `BAAI/bge-m3`（实测 1024 维与 vec 列吻合）。
+`reindex.py --embeddings --force` 真实回填 18 条向量后验收，全部通过：
+
+- 问答正常引用（MLA 双 VERIFIED、fragment 逐字、13s）；REVIEW_DUE 引用带 M4 影响摘要 +
+  复核任务链接（修复 retrieve 按 rel 选择后）；PD 分离 not_found 固定话术 + 一键记缺口
+  （带 qa 的 search_event_id）；SearchEvent(mode=qa) 落库进看板分母。
+- Ray vs MP：KA-008(STALE) 被隔离后上下文里无直接结论，模型诚实拒答 —— 规则叠加的正确
+  行为（原型的冲突演示依赖 STALE 入镜）；conflict 结构由 sqlite 测试覆盖。
+- 认领 → `draft`（真 DeepSeek 22s，含 sources/方向/代码引用建议）→ 发布回链 resolved →
+  重复回链 409 `GAP_RESOLVED` → 新资产立即可被问答检索引用（索引同事务）。
+- 降级：网关超时/错配时 /ask 与 /draft 都是 503 `AI_UNAVAILABLE`（曾真实撞过熔断期，
+  语义正确）；发布路径摘要超时→熔断→连坐问答的问题由「双档超时」修掉。
+- 看板 7 指标与 `/home` 复用率同数，与 psql 手工对账一致；seed --reset 清场后收尾。
+
+两个验收时踩出来的坑（改动别退回去）：
+
+- **uvicorn 必须在 backend/ 目录下起**：`Settings(env_file=".env")` 按**进程 cwd** 解析，
+  在别处起服务 .env 静默失效、网关落回默认 `localhost:9000`，症状是「chat/embedding
+  连接被拒」而配置看着全对。
+- devdb 的 pgserver 进程重启机器后不会自启，`/api` 全体挂起 + `/healthz` 正常就是库没起
+  （SQLAlchemy 在连接重试里堵住）—— 先 `devdb.ps1 status`，别去查应用层。
 
 ### 写代码前值得知道的坑
 

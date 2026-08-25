@@ -7,7 +7,7 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| POST | `/assets` | 发布 DRAFT（沉淀页）。body: title, direction, body_md(问题/环境/结论), models[], framework, fw_version, tags[], source, code_refs[] |
+| POST | `/assets` | 发布 DRAFT（沉淀页）。body: title, direction, body_md(问题/环境/结论), models[], framework, fw_version, tags[], source, code_refs[], gap_id?。带 gap_id = 缺口认领的沉淀（M5 闭环）：发布成功把缺口置 resolved 并回链 `resolved_asset_id`；gap 不存在 422、已 resolved 409 `GAP_RESOLVED` |
 | GET | `/assets/{id}` | 详情：资产 + 当前版本 + 验证/复用记录 + 代码引用 + 版本历史 |
 | GET | `/assets/{id}/transitions` | 状态流转审计流水 |
 | POST | `/assets/{id}/versions` | 新版本（人工修订） |
@@ -17,7 +17,7 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/search` | q, direction?, model?, framework?, status?, hist?(bool), limit=20, offset=0。返回 `{items[{asset, score:{total,parts[{label,value}]}}], total, terms[], recall{keyword,vector,keyword_hits,vector_hits}, search_event_id, hist}`，同时落 SearchEvent（零结果也落 —— 它是需求事件） |
-| POST | `/ask` | {question}。返回 {answer_md, citations[{asset_id, fragment, status, fw_version, updated_at}], risks[], conflict?, not_found:bool} |
+| POST | `/ask` | {question(≤500)}。返回 `{answer_md, citations[{asset_id, code, title, fragment, status, framework, fw_version, models[], updated_at}], risks[{type: warn\|bad, text, asset_id?, review_task_id?, ai_impact_summary}], conflict{a{asset_id,code,stand}, b{…}}?, not_found: bool, search_event_id}`，同时落 SearchEvent(mode=qa)（§9 需求事件） |
 
 `/search` 细则（实现见 docs/design.md §5）：
 
@@ -27,6 +27,20 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 - **terms**：分词后的查询词（已滤掉单字），前端据此做 `<mark>` 高亮。
 - **recall**：这次实际走的召回后端。`keyword` ∈ {pg_tsvector, portable}，
   `vector` ∈ {pgvector, python, off, unavailable}。降级要看得见，不能静默。
+
+`/ask` 细则（§6 硬性规则的落点见 `backend/app/services/ask.py`，M5）：
+
+- 检索复用 `/search` 的召回，但**按 rel 分项（不按总分）选前 N 条**做上下文 ——
+  trust/fresh 是列表排序信号，不代表「与问题相关」。阈值 `ZY_ASK_MIN_REL` 也打在 rel 上。
+- 无命中 → `not_found=true` + 固定话术，**不调 LLM**；LLM 自报资料不足 / 引用全部无效
+  也按无据处理。前端「记录为知识缺口」复用 `/feedback/not-found` 并带 `search_event_id`。
+- `citations[].fragment` 服务端逐字校验（忽略空白差异必须是正文子串），编造的引用会被
+  替换为服务端按词重合选出的真实段落。
+- `risks` 由服务端组装（不许 LLM 代笔）：引用 REVIEW_DUE 的资产附 warn + 其 open
+  复核任务的 `review_task_id` 与 M4 的 `ai_impact_summary`。
+- SearchEvent(mode=qa) 在**生成之前**提交：需求在提问那一刻已发生，AI 失败不抹掉分母。
+- **问答没有规则式兜底**：网关不可用 / 输出两次都不可解析 → **503 `AI_UNAVAILABLE`**
+  （「问答暂不可用」语义，不是 500；检索与浏览不受影响）。`/gaps/{id}/draft` 同此错误码。
 
 ## 反馈（三键，均免表单）
 
@@ -71,9 +85,10 @@ Base：`/api/v1`。鉴权 MVP 用请求头 `X-User`（内网单团队），V1.1 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/gaps` · POST `/gaps/{id}/claim` | 列表（open 优先、按 hit_count 降序，resolved 不返回）/ 认领 → status=claimed + claimed_by，返回 GapOut。同一人重复认领幂等；已被他人认领 409 `GAP_ALREADY_CLAIMED`，已解决 409 `GAP_RESOLVED`。认领只是登记「我来写」，不产出资产 —— AI 底稿等 `ai.draft_from_session`（M5） |
-| GET | `/home` | 首页一屏：`{stats{total,verified,review_due,open_gaps}, recent_validated[{asset,validator_id,note,at}], hot[asset], gaps[]}`。与 `/dashboard` 不是一回事 —— 那边是带口径的 7 指标，这边只是首屏展示数据 |
-| GET | `/dashboard` | 7 指标：reuse_rate{num,den,trend[]}, search_ok, not_found_30d, review_backlog, verified_count, rework_hours_trend[], coverage[direction][status] |
+| GET | `/gaps` · POST `/gaps/{id}/claim` | 列表（open 优先、按 hit_count 降序，resolved 不返回）/ 认领 → status=claimed + claimed_by，返回 GapOut。同一人重复认领幂等；已被他人认领 409 `GAP_ALREADY_CLAIMED`，已解决 409 `GAP_RESOLVED`。认领只是登记「我来写」，不产出资产 |
+| POST | `/gaps/{id}/draft` | 认领人请求 AI 底稿（M5）。返回 `{gap_id, draft{title, problem, env, conclusion, tags[], direction, models[], framework, fw_version, code_refs[]}, sources[asset_id]}` —— 只是沉淀页预填建议，**不落库**；作者确认后走 `POST /assets`（带 `gap_id`）发布。未认领 409 `GAP_NOT_CLAIMED`、他人认领 409 `GAP_ALREADY_CLAIMED`、已解决 409 `GAP_RESOLVED`、网关不可用 503 `AI_UNAVAILABLE`（认领不受影响）。内部检索**不落 SearchEvent**（系统辅助不是需求事件，落了污染复用率分母） |
+| GET | `/home` | 首页一屏：`{stats{total,verified,review_due,open_gaps, reuse_rate{num,den,pct}}, recent_validated[{asset,validator_id,note,at}], hot[asset], gaps[]}`。reuse_rate 与 `/dashboard` 同一口径（services/metrics.py），den=0 时 pct=null（前端显示「—」） |
+| GET | `/dashboard` | 7 指标（M5，全部由事件表实时聚合，口径见 design.md §9）：`{window_days, generated_at, reuse_rate{num,den,pct,trend[{label,value}]}, search_ok{pct,ok_sessions,total_sessions,trend[]}, not_found_30d, review_backlog, verified_count, draft_count, open_gaps, claimed_gaps, gaps_total, rework_hours_trend[], rework_hours_estimated, rework_hours_per_miss, coverage{direction:{status:n}}, reuse_by_direction{direction:n}}`。估算指标（rework）响应里自报 estimated，不冒充实测 |
 
 ## Webhook
 

@@ -57,7 +57,7 @@ npm install
 npm run dev                      # http://localhost:5173，/api 代理到 8000
 ```
 
-## 当前状态（2026-08-24 M4 完成）
+## 当前状态（2026-08-25 M5 完成 —— MVP 全部里程碑交付）
 
 - [x] 设计定稿（docs/design.md）、原型验证通过
 - [x] **M1** backend：11 实体模型 + 状态机；Alembic 首个迁移；`POST /assets`、`GET /assets/{id}`、
@@ -87,7 +87,24 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 - [x] **M4** 在真实 PG 上验收：签名 401、去抖合并、枚举往返、四选一状态/证据/409 语义、
       降级路径（无摘要草稿 + `NO_AI_DRAFT`）、accept 后 pg_tsvector 立即可检索、tag 批量触发
       全部实测通过；`pytest` 169 passed（sqlite）
-- [ ] 问答、看板仍是骨架（M5）
+- [x] **M5-0** LLM 网关 API key：`ZY_LLM_API_KEY`（空 = 内网免鉴权，非空带 Bearer 头）+
+      embedding 独立网关 `ZY_EMBEDDING_GATEWAY_URL/_API_KEY`（空 = 跟随主网关）；熔断按
+      chat/embedding 端点分开；超时两档（检索 6s / 生成 60s）。实测接入：chat=DeepSeek
+      `deepseek-v4-flash`、embedding=SiliconFlow `BAAI/bge-m3`（1024 维，与 vec 列吻合）
+- [x] **M5-1** `POST /ask` RAG 问答：§6 五条硬性规则逐条落地（引用逐字校验、not_found
+      不调 LLM、STALE 召回层隔离、冲突并列、REVIEW_DUE 风险挂 M4 影响摘要）；无兜底，
+      降级 503 `AI_UNAVAILABLE`；SearchEvent(mode=qa) 生成前落库
+- [x] **M5-1** `GET /dashboard` 7 指标全部由事件表实时聚合（`services/metrics.py`，口径
+      冻结进 design.md §9）；`/home` 第五格复用率同口径同函数
+- [x] **M5-1** 缺口认领闭环：`POST /gaps/{id}/draft`（AI 底稿，只返回预填不落库、内部
+      检索不落 SearchEvent）→ `POST /assets` 带 `gap_id` 发布 → 缺口自动 resolved 回链
+- [x] **M5-2** frontend：问答页（引用块/风险/冲突/not_found+一键记缺口/「暂不可用」五态）、
+      看板页（4 卡 + 趋势条 + 覆盖矩阵、公式与分子分母展示、估算自报）、首页复用率真数、
+      认领→AI 底稿→沉淀页预填→发布回链；「后端没有的按钮 disabled 占位」规则退役
+- [x] **M5** 在真实 PG + 真实公有云网关（DeepSeek + SiliconFlow）上验收：MLA 双 VERIFIED
+      引用、KA-010 REVIEW_DUE 引用带 M4 影响摘要与复核链接、PD 分离 not_found→记缺口→
+      认领→底稿(22s)→发布 KA-019→立即可检索可引用、重复回链 409、降级 503 语义、
+      看板与 /home 数字对账全部通过；`pytest` 211 passed（sqlite）；seed --reset 已清场
 
 ### M2 期间定下的三件事（改动别退回去）
 
@@ -128,6 +145,26 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 4. **`resolve` 顺带关闭同资产其它 open 任务**，且队列查询只列资产仍是 REVIEW_DUE 的任务 ——
    两道防线防的是同一件事：不让人对着已处理完的资产点四选一收 409。
 
+### M5 期间定下的五件事（改动别退回去）
+
+1. **问答检索按 rel 分项选择，不按总分**：trust/fresh/proof 是搜索列表的排序信号，不代表
+   「与问题相关」。真链路验收踩过：aclgraph 提问时 KA-010(REVIEW_DUE) rel=30 全场最高，
+   却被六条弱相关 VERIFIED 的总分挤出 top5 —— 问答答不出来，§6 规则 5 也无从谈起。
+   实现在 `services/ask.py::retrieve`（取大池按 rel 排序，阈值也打 rel）。
+2. **超时两档、熔断按端点分**：`llm_timeout`(6s) 只管检索路径的 embed；chat 生成
+   （摘要/草稿/问答/底稿）一律 `generation_timeout`(60s，公有云波动实测 22s 与 30s+ 都出现过)。
+   拿检索超时卡生成会频繁超时→熔断→连带把问答一起降级 60 秒。chat 与 embedding 的熔断
+   必须分开 —— 两端可能是两家服务（DeepSeek 没有 embedding），一路失败不许静默另一路。
+3. **问答没有兜底，降级是明确语义**：网关不可用/输出不可解析 → 503 `AI_UNAVAILABLE`，
+   绝不悄悄用模型通用知识把答案编出来（§6 规则 2 靠「无命中不调 LLM」+「无有效引用即无据」
+   双保险，不靠提示词自觉）。SearchEvent(mode=qa) 在生成之前 commit —— 503 的会话也进分母。
+4. **复用率分母防双算**：分母 = 去重需求会话 + **不带 search_event_id 的** not_found 反馈。
+   带 event_id 的缺口反馈，其需求已随搜索会话计入。同理，`/gaps/{id}/draft` 的内部检索
+   **不落 SearchEvent** —— 系统辅助不是用户需求，落了就是自己污染自己的分母。
+5. **底稿只是预填**：`/gaps/{id}/draft` 不落库任何东西，闭环发生在 `POST /assets` 带
+   `gap_id` 时（缺口置 resolved + 回链资产）。这与 M3「认领不产出资产」是同一条线的
+   两端，中间不许插入任何自动发布。
+
 ### M1 期间发现并修掉的两个 PG 专属问题（改动别退回去）
 
 1. `KnowledgeAsset.current_version_id` ↔ `AssetVersion.asset_id` 是环形外键，必须 `use_alter`，
@@ -135,15 +172,25 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 2. `Trigger` 枚举的 PG 类型名是 `transition_trigger`：`pg_catalog` 有内置伪类型 `trigger`
    且隐式排在 search_path 最前，同名会被遮蔽并报 `column "trigger" has pseudo-type trigger`。
 
-## 下一步 Backlog（按序执行）
+## 下一步（V1.1 清单 —— MVP 五个里程碑已全部完成）
 
-- ~~**M3 反馈闭环**~~：已完成（2026-08-24）。
-- ~~**M4 自动更新**~~：已完成（2026-08-24）。遗留到 V1.1：接 Git API 拉真 diff
-  （AI 摘要现基于文件清单 + 提交说明）、纯格式化 diff 预判抑制。
-- **M5 问答与看板**：RAG 问答（引用/无据明说/冲突并列，规则见 design.md §6）；看板 7 指标由事件表实时聚合；
-  `ai.draft_from_session`（缺口认领的 AI 底稿）。
+MVP（M1–M5）已交付。以下按价值/依赖排序，是 V1.1 的候选项：
 
-每个 M 完成后：对照 `prototype/kms-prototype.html` 的对应页面做 UI 验收。
+1. **接 Git API 拉真 diff**（M4 遗留）：AI 影响摘要/更新草稿现基于 webhook 的文件清单 +
+   提交说明；拉到真 diff 后顺带做「纯格式化 diff 预判抑制」（抑制记录可抽查）。
+2. **SSO 鉴权**：替换 `X-User` 头（`frontend/src/api/client.ts::CURRENT_USER` 一并删除）。
+3. **图片链路**：沉淀页图片上传 + 存储 → `ai.embed` 多模态化（候选 Qwen/Qwen3-VL-Embedding-8B，
+   4096 维需 pgvector ≥0.7 的 halfvec 才能建 HNSW —— `vector` 类型索引上限 2000 维，
+   devdb 自带 0.6.2 要先升级）→ 问答 chat 换 VL 模型。换 embedding 维度 = 新迁移重建
+   vec 列 + `reindex.py --embeddings --force` 全量回填（.env.example 里已写明）。
+4. **沉淀页会话接入**：`来源 · AI 自动提取` 现在是原型演示数据；接真实 Claude Code /
+   IDE 会话后由 `ai.py` 抽取（沉淀页的另一半 AI 预填，与缺口底稿共用清洗逻辑）。
+5. **问答历史模式**：§6 规则 3 后半句 —— 历史模式引用挂「已失效，仅供追溯」横幅。
+6. **发布路径 embedding 后台化**：`POST /assets` 现同步等一次 embedding 网关往返，
+   库量上来后挪后台任务（`api/assets.py` 里有 TODO）。
+7. **导航式查询识别**：§9 分母的「− 导航式查询」MVP 未实现，需要点击行为数据积累后再定。
+
+每项动手前：先在本文件登记范围，完成后对照 `prototype/kms-prototype.html` 做 UI 验收（如涉及）。
 
 ## 不装 Docker 起 PostgreSQL（`scripts/devdb.ps1`）
 
