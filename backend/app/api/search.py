@@ -6,7 +6,19 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Direction, SearchEvent, Status
-from ..schemas import AskIn, AskResponse, RecallOut, ScoreOut, ScorePartOut, SearchItem, SearchResponse
+from ..schemas import (
+    AskConflict,
+    AskIn,
+    AskResponse,
+    AskRisk,
+    Citation,
+    RecallOut,
+    ScoreOut,
+    ScorePartOut,
+    SearchItem,
+    SearchResponse,
+)
+from ..services import ask as ask_service
 from ..services.search import ScoredAsset, run_search
 from .assets import USER_ID_MAX, build_brief
 
@@ -100,9 +112,44 @@ def search(
 
 
 @router.post("/ask", response_model=AskResponse)
-def ask(body: AskIn, db: Session = Depends(get_db), x_user: str = Header(default="anonymous")):
-    """RAG 问答。TODO(M5)，硬性规则见 docs/design.md §6：
-    引用必须带来源/状态/版本；无据返回 not_found=True 与固定话术；
-    STALE/ARCHIVED 不入上下文；冲突并列展示（conflict 字段）；REVIEW_DUE 加 risks。
+def ask(body: AskIn, db: Session = Depends(get_db),
+        x_user: str = Header(default="anonymous", max_length=USER_ID_MAX)):
+    """RAG 问答（M5，硬性规则见 docs/design.md §6，实现在 services/ask.py）。
+
+    SearchEvent(mode=qa) 在检索完成后、生成之前就提交 —— 问答会话是需求事件（§9 分母），
+    需求在提问那一刻已经发生，AI 后续失败不该把它抹掉；503 的会话也要进分母。
+
+    问答没有规则式兜底：网关不可用 / 输出不可解析返回 503 AI_UNAVAILABLE
+    （「问答暂不可用」），绝不悄悄用模型通用知识把答案编出来。
     """
-    raise NotImplementedError("M5")
+    question = body.question.strip()
+    candidates = ask_service.retrieve(db, question)
+
+    event = SearchEvent(
+        user_id=x_user,
+        query=question[:QUERY_MAX],
+        mode="qa",
+        result_ids=[c.asset.id for c in candidates],
+    )
+    db.add(event)
+    db.commit()
+
+    if not candidates:
+        answer = ask_service.not_found_answer()
+    else:
+        try:
+            answer = ask_service.generate(db, question, candidates)
+        except ask_service.AskUnavailable as exc:
+            raise HTTPException(503, detail=(
+                "AI_UNAVAILABLE",
+                "问答暂不可用（LLM 网关不可达或输出异常），请稍后再试；检索与浏览不受影响。",
+            )) from exc
+
+    return AskResponse(
+        answer_md=answer.answer_md,
+        citations=[Citation(**c) for c in answer.citations],
+        risks=[AskRisk(**r) for r in answer.risks],
+        conflict=AskConflict(**answer.conflict) if answer.conflict else None,
+        not_found=answer.not_found,
+        search_event_id=event.id,
+    )

@@ -118,5 +118,10 @@ def test_home_and_gaps_share_the_same_ordering(client, db):
 
 def test_home_on_an_empty_database(client):
     data = home(client)
-    assert data["stats"] == {"total": 0, "verified": 0, "review_due": 0, "open_gaps": 0}
+    assert data["stats"] == {
+        "total": 0, "verified": 0, "review_due": 0, "open_gaps": 0,
+        # 复用率与看板同一口径（M5）：没有需求事件时分母为 0，pct=None（前端显示「—」），
+        # 绝不显示成 0% —— 「没人有需求」和「有需求但没人复用」是两码事。
+        "reuse_rate": {"num": 0, "den": 0, "pct": None},
+    }
     assert data["recent_validated"] == [] and data["hot"] == [] and data["gaps"] == []

@@ -18,6 +18,7 @@ from ..models import (
     CodeReference,
     Framework,
     KnowledgeAsset,
+    KnowledgeGap,
     Model,
     ReuseEvent,
     StatusTransition,
@@ -194,7 +195,19 @@ def create_asset(body: AssetCreate, db: Session = Depends(get_db), x_user: str =
     摘要与向量都在同一个事务里同步产出：索引晚一拍就意味着「刚沉淀的知识搜不到」，
     而这正是本系统要解决的问题。两者都可降级（网关不可用不影响发布）。
     TODO：库量上来后把 embedding 挪到后台任务，别让发布等一次网关往返。
+
+    带 gap_id 的发布来自缺口认领（M5 闭环）：发布成功把缺口置 resolved 并回链资产。
     """
+    gap = None
+    if body.gap_id is not None:
+        # 先校验再干活：缺口编错了别让 AI 摘要白花一次网关钱
+        gap = db.get(KnowledgeGap, body.gap_id)
+        if gap is None:
+            raise HTTPException(422, detail=("VALIDATION_ERROR", f"缺口 {body.gap_id} 不存在"))
+        if gap.status == "resolved":
+            raise HTTPException(409, detail=(
+                "GAP_RESOLVED", f"缺口 {body.gap_id} 已被解决（KA-{gap.resolved_asset_id or 0:03d}）"))
+
     summary, summary_source = make_summary(body.title, body.body_md)
     asset = KnowledgeAsset(
         title=body.title,
@@ -239,6 +252,12 @@ def create_asset(body: AssetCreate, db: Session = Depends(get_db), x_user: str =
             asset_id=asset.id, kind=ref.kind, repo=ref.repo,
             path_or_key=ref.path_or_key, ref_id=ref.ref_id, note=ref.note, watch=ref.watch,
         ))
+
+    if gap is not None:
+        # 缺口闭环：这份知识就是当初「没有找到答案」要的东西。resolved 后不再吸收新反馈
+        # （M3 定的：搜不到 ≠ 缺知识，之后同主题的反馈另开缺口）。
+        gap.status = "resolved"
+        gap.resolved_asset_id = asset.id
 
     db.flush()   # 索引要读刚建的框架/模型关联，先落到会话里
     indexing.refresh_doc(db, asset, body_md=body.body_md)

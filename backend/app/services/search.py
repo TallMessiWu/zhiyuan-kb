@@ -39,6 +39,11 @@ WEIGHTS = {
 # 浏览模式（无查询词）一次最多铺多少条候选进重排 —— 库大了不至于把整库拉进内存。
 BROWSE_CANDIDATES = 200
 
+# rel 分项在 score.parts 里的展示名。问答（services/ask.py）按它取每条结果的相关性
+# 判断「是否算命中」（§6 规则 2 的阈值打在 rel 上，不打总分 —— trust 会把不相关的
+# VERIFIED 资产抬过总分线）。
+REL_LABEL = "关键词+语义"
+
 
 @dataclass
 class ScorePart:
@@ -73,7 +78,7 @@ def rerank(
     STALE/ARCHIVED 不应进入本函数（在召回层就被隔离，历史模式除外）。
     """
     s = Score()
-    s.add("关键词+语义", min(rel, WEIGHTS["rel_cap"]))
+    s.add(REL_LABEL, min(rel, WEIGHTS["rel_cap"]))
 
     trust = WEIGHTS["trust"].get(asset.status)
     if trust is not None:

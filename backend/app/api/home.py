@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import KnowledgeAsset, KnowledgeGap, Status, ValidationRecord
-from ..schemas import AssetBrief, GapOut, HomeResponse, HomeStats, RecentValidation
+from ..schemas import AssetBrief, GapOut, HomeResponse, HomeStats, RecentValidation, ReuseRateBrief
+from ..services import metrics
 from ..services.search import framework_label, load_framework_rows, load_model_names
 from .assets import build_brief
 from .gaps import load_gaps
@@ -45,6 +46,8 @@ def home(db: Session = Depends(get_db)):
     counts = dict(db.execute(
         select(KnowledgeAsset.status, func.count()).group_by(KnowledgeAsset.status)
     ).all())
+    # 第五格「有效复用率」与看板同一口径（services/metrics.py），不许在这里另算一份近似值
+    num, den, pct = metrics.reuse_rate(db)
     stats = HomeStats(
         total=sum(n for st, n in counts.items() if st != Status.ARCHIVED),
         verified=counts.get(Status.VERIFIED, 0),
@@ -52,6 +55,7 @@ def home(db: Session = Depends(get_db)):
         open_gaps=db.scalar(
             select(func.count()).select_from(KnowledgeGap).where(KnowledgeGap.status == "open")
         ) or 0,
+        reuse_rate=ReuseRateBrief(num=num, den=den, pct=pct),
     )
 
     # 最近验证：取最新的验证记录，按资产去重（同一条资产只展示最近一次）

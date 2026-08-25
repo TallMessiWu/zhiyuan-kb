@@ -35,6 +35,8 @@ class AssetCreate(BaseModel):
     source: str = Field(default="ai_session", max_length=32)
     source_ref: str = Field(default="", max_length=300)
     code_refs: list[CodeRefIn] = []
+    # 从缺口认领而来的沉淀：发布成功把该缺口置 resolved 并回链资产（M5 闭环）
+    gap_id: int | None = None
 
 
 class ScorePartOut(BaseModel):
@@ -296,23 +298,63 @@ class HookAck(BaseModel):
 
 
 class AskIn(BaseModel):
-    question: str
+    question: str = Field(min_length=1, max_length=500)   # 落 SearchEvent.query，对齐列宽
 
 
 class Citation(BaseModel):
+    """引用块。§6 规则 1：必须含 资产链接/命中段落/状态/适用版本/更新时间。
+    title/framework/models 一并带上 —— 否则前端要为每条引用再拉一次详情。"""
+
     asset_id: int
+    title: str
     fragment: str
     status: Status
-    fw_version: str
+    framework: str = ""
+    fw_version: str = ""
+    models: list[str] = []
     updated_at: datetime
+
+    @computed_field
+    @property
+    def code(self) -> str:
+        return f"KA-{self.asset_id:03d}"
+
+
+class AskRisk(BaseModel):
+    """风险提示。§6 规则 5：引用 REVIEW_DUE 必须附「可能过时」并链其 AI 变化摘要（M4 产物）。"""
+
+    type: Literal["warn", "bad"] = "warn"
+    text: str
+    asset_id: int | None = None
+    review_task_id: int | None = None
+    ai_impact_summary: str = ""
+
+
+class AskConflictSide(BaseModel):
+    asset_id: int
+    stand: str
+
+    @computed_field
+    @property
+    def code(self) -> str:
+        return f"KA-{self.asset_id:03d}"
+
+
+class AskConflict(BaseModel):
+    """§6 规则 4：多资产结论互斥时并列展示「说法 A / 说法 B」，系统不选边。"""
+
+    a: AskConflictSide
+    b: AskConflictSide
 
 
 class AskResponse(BaseModel):
     answer_md: str
     citations: list[Citation] = []
-    risks: list[str] = []
-    conflict: dict | None = None
+    risks: list[AskRisk] = []
+    conflict: AskConflict | None = None
     not_found: bool = False
+    # 问答会话是需求事件（§9 分母）；前端「记录为知识缺口」要带它调 /feedback/not-found
+    search_event_id: int
 
 
 # ---------- 首页（GET /home）与缺口（GET /gaps） ----------
@@ -357,14 +399,23 @@ class RecentValidation(BaseModel):
     at: datetime
 
 
+class ReuseRateBrief(BaseModel):
+    """有效复用率（近 30 天）。分子分母必须随数字一起给 —— 硬规则 5 的展示面：
+    让任何人都能看出这不是点击量。den=0 时 pct=None，前端显示「—」。"""
+
+    num: int
+    den: int
+    pct: float | None
+
+
 class HomeStats(BaseModel):
-    """首页数字条。有效复用率不在这里 —— 它的口径（非作者成功复用 ÷ 需求事件）
-    是看板指标，M5 由事件表实时聚合，M2 拿半成品数字冒充等于违反硬规则 5。"""
+    """首页数字条。有效复用率与看板同一口径（services/metrics.py），不许另算一份。"""
 
     total: int          # 在库资产（不含 ARCHIVED）
     verified: int
     review_due: int
     open_gaps: int
+    reuse_rate: ReuseRateBrief
 
 
 class HomeResponse(BaseModel):
@@ -372,3 +423,67 @@ class HomeResponse(BaseModel):
     recent_validated: list[RecentValidation] = []
     hot: list[AssetBrief] = []
     gaps: list[GapOut] = []
+
+
+# ---------- 看板（GET /dashboard，口径见 docs/design.md §9） ----------
+
+class TrendPoint(BaseModel):
+    label: str      # "4月"
+    value: float
+
+
+class ReuseRateOut(ReuseRateBrief):
+    trend: list[TrendPoint] = []
+
+
+class SearchOkOut(BaseModel):
+    """搜索成功率：去重后的搜索会话里「有结果且未反馈没找到答案」的占比。
+    MVP 没有点击上报，以「有结果」代替原型口径的「有结果点击」（§9 落地注记）。"""
+
+    pct: float | None
+    ok_sessions: int
+    total_sessions: int
+    trend: list[TrendPoint] = []
+
+
+class DashboardResponse(BaseModel):
+    window_days: int
+    generated_at: datetime
+    reuse_rate: ReuseRateOut
+    search_ok: SearchOkOut
+    not_found_30d: int
+    review_backlog: int        # REVIEW_DUE 资产数（目标 ≤5）
+    verified_count: int
+    draft_count: int
+    open_gaps: int
+    claimed_gaps: int
+    gaps_total: int            # 未 resolved 的缺口总数（open + claimed）
+    # 重复探索工时是估算（重复需求会话 × 平均排查工时），estimated 字段明示，不冒充实测
+    rework_hours_trend: list[TrendPoint] = []
+    rework_hours_estimated: bool = True
+    rework_hours_per_miss: float
+    coverage: dict[str, dict[str, int]]      # direction -> status -> 资产数
+    reuse_by_direction: dict[str, int]       # direction -> 非作者成功复用事件数（全时段）
+
+
+# ---------- 缺口 AI 底稿（POST /gaps/{id}/draft，M5） ----------
+
+class GapDraft(BaseModel):
+    """沉淀页预填底稿。全部是「建议」：作者确认三项后才走 POST /assets 发布为 DRAFT。"""
+
+    title: str = ""
+    problem: str = ""
+    env: str = ""
+    conclusion: str = ""
+    tags: list[str] = []
+    direction: Direction = Direction.feature
+    models: list[str] = []
+    framework: str = ""
+    fw_version: str = ""
+    code_refs: list[CodeRefIn] = []
+
+
+class GapDraftOut(BaseModel):
+    gap_id: int
+    draft: GapDraft
+    sources: list[int] = []    # 生成时参考的资产 id（检索上下文），前端可展示「基于 KA-xxx」

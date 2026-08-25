@@ -11,7 +11,9 @@
 """
 from __future__ import annotations
 
+import json
 import logging
+import re
 import time
 
 import httpx
@@ -19,6 +21,24 @@ import httpx
 from ..config import settings
 
 log = logging.getLogger(__name__)
+
+
+def parse_json_output(text: str) -> dict | None:
+    """解析 LLM 的 JSON 输出：剥掉 ``` 围栏 / 前后闲话后 json.loads。
+    返回 None 表示不可解析（调用方决定重试或降级）。问答与缺口底稿共用。"""
+    body = text.strip()
+    if body.startswith("```"):
+        body = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", body)
+    if not body.startswith("{"):
+        start, end = body.find("{"), body.rfind("}")
+        if start == -1 or end <= start:
+            return None
+        body = body[start:end + 1]
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
 
 
 class GatewayUnavailable(RuntimeError):
@@ -31,7 +51,8 @@ class _Circuit:
     没有半开重试的复杂度 —— 静默期一过就正常放行，失败再熔断。
     """
 
-    def __init__(self) -> None:
+    def __init__(self, name: str) -> None:
+        self.name = name
         self._blocked_until = 0.0
 
     def closed(self) -> bool:
@@ -39,13 +60,25 @@ class _Circuit:
 
     def trip(self, exc: Exception) -> None:
         self._blocked_until = time.monotonic() + settings.llm_circuit_seconds
-        log.warning("LLM 网关不可用，%.0fs 内降级：%s", settings.llm_circuit_seconds, exc)
+        log.warning("%s 网关不可用，%.0fs 内降级：%s", self.name, settings.llm_circuit_seconds, exc)
 
     def reset(self) -> None:
         self._blocked_until = 0.0
 
 
-_circuit = _Circuit()
+# chat 与 embedding 可能是两家服务（例：chat 走 DeepSeek、embedding 走 SiliconFlow），
+# 熔断必须按端点分开 —— 否则 embedding 那路 404 一次，chat 也被静默掉 60s。
+_circuits = {"chat": _Circuit("chat"), "embedding": _Circuit("embedding")}
+
+
+def _endpoint(kind: str) -> tuple[str, str]:
+    """(base_url, api_key)。embedding 网关/密钥留空时跟随主网关。"""
+    if kind == "embedding":
+        return (
+            settings.embedding_gateway_url or settings.llm_gateway_url,
+            settings.embedding_api_key or settings.llm_api_key,
+        )
+    return settings.llm_gateway_url, settings.llm_api_key
 
 
 def _mode(name: str) -> str:
@@ -53,32 +86,41 @@ def _mode(name: str) -> str:
     return {"ai_summary": settings.ai_summary, "vector_search": settings.vector_search}[name].lower()
 
 
-def _post(path: str, payload: dict, *, mode: str) -> dict | None:
+def _post(path: str, payload: dict, *, mode: str, kind: str = "chat",
+          timeout: float | None = None) -> dict | None:
     """调网关。返回 None 表示「本次不可用，请降级」。"""
     if _mode(mode) == "off":
         return None
-    if not _circuit.closed():
+    circuit = _circuits[kind]
+    if not circuit.closed():
         return None
+    base_url, api_key = _endpoint(kind)
+    # key 留空 = 内网免鉴权网关，不带头；非空按 OpenAI 惯例带 Bearer
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
-        with httpx.Client(base_url=settings.llm_gateway_url, timeout=settings.llm_timeout) as client:
+        with httpx.Client(base_url=base_url, headers=headers,
+                          timeout=timeout or settings.llm_timeout) as client:
             resp = client.post(path, json=payload)
             resp.raise_for_status()
-            _circuit.reset()
+            circuit.reset()
             return resp.json()
     except Exception as exc:                      # 网络错误 / 超时 / 4xx / 5xx 一律按不可用处理
-        _circuit.trip(exc)
+        circuit.trip(exc)
         if _mode(mode) == "on":
             raise GatewayUnavailable(f"LLM 网关不可用：{exc}") from exc
         return None
 
 
-def chat(prompt: str, system: str = "", *, mode: str = "ai_summary") -> str | None:
+def chat(prompt: str, system: str = "", *, mode: str = "ai_summary",
+         timeout: float | None = None) -> str | None:
+    """生成类调用，默认用 generation_timeout（摘要/草稿/问答都是等得起的场景；
+    M5 实测：拿 6s 检索超时卡摘要会频繁超时→熔断，连带问答一起被降级 60s）。"""
     data = _post("/chat/completions", {
         "model": settings.llm_model,
         "messages": ([{"role": "system", "content": system}] if system else [])
                     + [{"role": "user", "content": prompt}],
         "temperature": 0.2,
-    }, mode=mode)
+    }, mode=mode, timeout=timeout or settings.generation_timeout)
     if not data:
         return None
     try:
@@ -96,7 +138,8 @@ def embed(texts: list[str], *, mode: str = "vector_search") -> list[list[float]]
     """
     if not texts:
         return []
-    data = _post("/embeddings", {"model": settings.embedding_model, "input": texts}, mode=mode)
+    data = _post("/embeddings", {"model": settings.embedding_model, "input": texts},
+                 mode=mode, kind="embedding")
     if not data:
         return None
     try:
@@ -127,13 +170,41 @@ def summarize(title: str, body_md: str) -> str | None:
 
 def gateway_configured() -> bool:
     """给能力上报用：开关没关且熔断未打开，就认为「这次可能能用」。"""
-    return _mode("ai_summary") != "off" and _circuit.closed()
+    return _mode("ai_summary") != "off" and _circuits["chat"].closed()
 
 
-def draft_from_session(transcript: str) -> dict:
-    """从会话/Diff/Issue 提取草稿：{title, problem, env, conclusion, tags, direction, code_refs}。
-    TODO(M5 缺口认领)：prompt 模板 + JSON 结构化输出校验。"""
-    raise NotImplementedError
+_GAP_DRAFT_SYSTEM = (
+    "你是推理框架团队的知识库编辑。团队记录了一个知识缺口 —— 反复被问但库里没有答案的问题。"
+    "请基于缺口问句和给出的相关资产片段，为将要沉淀这份知识的作者生成一份预填底稿。"
+    "输出严格的 JSON 对象（不要 markdown 围栏、不要解释），形状："
+    '{"title": "一句话问题标题", "problem": "问题描述（markdown）", '
+    '"env": "适用环境（框架/版本/硬件，一两句）", '
+    '"conclusion": "结论或排查思路（markdown），拿不准的逐条标注（待验证）", '
+    '"tags": ["…"], "direction": "model|chain|feature", "models": ["…"], '
+    '"framework": "…", "fw_version": "…", '
+    '"code_refs": [{"repo": "org/repo", "path_or_key": "相关源码路径或配置键", "note": "…"}]}。'
+    "相关资产只是线索：能支撑的写进结论并说明来自哪份资产；不足以下结论的照实写（待验证），"
+    "绝对不要编造参数或版本号。这是给作者改的底稿，不是最终答案。"
+)
+
+
+def draft_from_session(question: str, context: str) -> dict | None:
+    """缺口认领的 AI 底稿：从缺口问句 + 相关检索上下文生成沉淀页预填内容。
+
+    返回 None 表示网关不可用或输出不可解析 —— 认领本身不受影响（M3 定的：认领只登记），
+    调用方转 503，作者仍可打开空白沉淀页手写。产出只是「建议」：作者确认三项后走
+    POST /assets 正常发布为 DRAFT（硬规则 1：AI 只到草稿为止）。
+    """
+    text = chat(
+        f"知识缺口问句：{question}\n\n相关资产片段（可能为空）：\n{context or '（库内没有相关内容）'}",
+        _GAP_DRAFT_SYSTEM,
+    )
+    if not text:
+        return None
+    data = parse_json_output(text)
+    if data is None:
+        log.warning("缺口底稿输出不是合法 JSON，放弃本次生成")
+    return data
 
 
 # 影响摘要长度上限：复核队列一条里要读完，比检索摘要（140）宽松但不该是一篇文章
