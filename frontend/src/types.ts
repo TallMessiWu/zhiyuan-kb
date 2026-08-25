@@ -98,20 +98,48 @@ export interface SearchResponse {
   recall: RecallInfo;
 }
 
+/** 引用块（§6 规则 1：必须含 资产/命中段落/状态/适用版本/更新时间） */
 export interface Citation {
   asset_id: number;
+  code: string;
+  title: string;
   fragment: string;
   status: Status;
+  framework: string;
   fw_version: string;
+  models: string[];
   updated_at: string;
+}
+
+/** 风险提示（§6 规则 5：引用 REVIEW_DUE 附「可能过时」并链其 M4 AI 影响摘要） */
+export interface AskRisk {
+  type: "warn" | "bad";
+  text: string;
+  asset_id: number | null;
+  review_task_id: number | null;
+  ai_impact_summary: string;
+}
+
+export interface AskConflictSide {
+  asset_id: number;
+  code: string;
+  stand: string;
+}
+
+/** §6 规则 4：结论互斥时并列展示，系统不选边 */
+export interface AskConflict {
+  a: AskConflictSide;
+  b: AskConflictSide;
 }
 
 export interface AskResponse {
   answer_md: string;
   citations: Citation[];
-  risks: string[];
-  conflict: Record<string, unknown> | null;
+  risks: AskRisk[];
+  conflict: AskConflict | null;
   not_found: boolean;
+  /** 问答会话的需求事件 id；「记录为知识缺口」要带它调 /feedback/not-found */
+  search_event_id: number;
 }
 
 /* ---------- 资产详情（GET /assets/{id}） ---------- */
@@ -229,6 +257,8 @@ export interface AssetCreate {
   source: string;
   source_ref: string;
   code_refs: Array<Omit<CodeRefOut, "id">>;
+  /** 缺口认领而来的沉淀：发布成功把该缺口置 resolved 并回链（M5 闭环） */
+  gap_id?: number;
 }
 
 /** POST /feedback/useful 响应；promoted=true 表示凭非作者复用证据升级为 VERIFIED */
@@ -326,12 +356,20 @@ export interface RecentValidation {
   at: string;
 }
 
-/** 首页数字条。有效复用率不在这里 —— 口径是看板指标（design.md §9），M5 才有 */
+/** 有效复用率（近 30 天）。分子分母随数字一起给（硬规则 5）；den=0 时 pct=null，显示「—」 */
+export interface ReuseRateBrief {
+  num: number;
+  den: number;
+  pct: number | null;
+}
+
+/** 首页数字条。复用率与看板同一口径（services/metrics.py），不许前端另算 */
 export interface HomeStats {
   total: number;
   verified: number;
   review_due: number;
   open_gaps: number;
+  reuse_rate: ReuseRateBrief;
 }
 
 export interface HomeResponse {
@@ -339,4 +377,59 @@ export interface HomeResponse {
   recent_validated: RecentValidation[];
   hot: AssetBrief[];
   gaps: GapOut[];
+}
+
+/* ---------- 看板（GET /dashboard，口径见 design.md §9） ---------- */
+
+export interface TrendPoint {
+  label: string;
+  value: number;
+}
+
+export interface DashboardResponse {
+  window_days: number;
+  generated_at: string;
+  reuse_rate: ReuseRateBrief & { trend: TrendPoint[] };
+  search_ok: {
+    pct: number | null;
+    ok_sessions: number;
+    total_sessions: number;
+    trend: TrendPoint[];
+  };
+  not_found_30d: number;
+  review_backlog: number;
+  verified_count: number;
+  draft_count: number;
+  open_gaps: number;
+  claimed_gaps: number;
+  gaps_total: number;
+  /** 估算指标：rework_hours_estimated 明示，不冒充实测 */
+  rework_hours_trend: TrendPoint[];
+  rework_hours_estimated: boolean;
+  rework_hours_per_miss: number;
+  coverage: Record<Direction, Record<Status, number>>;
+  reuse_by_direction: Record<Direction, number>;
+}
+
+/* ---------- 缺口 AI 底稿（POST /gaps/{id}/draft，M5） ---------- */
+
+/** 沉淀页预填底稿：全部是建议，作者确认三项后走 POST /assets 发布 */
+export interface GapDraft {
+  title: string;
+  problem: string;
+  env: string;
+  conclusion: string;
+  tags: string[];
+  direction: Direction;
+  models: string[];
+  framework: string;
+  fw_version: string;
+  code_refs: Array<Omit<CodeRefOut, "id" | "ref_id"> & { ref_id?: string }>;
+}
+
+export interface GapDraftOut {
+  gap_id: number;
+  draft: GapDraft;
+  /** 生成时参考的资产 id（沉淀页可展示「基于 KA-xxx」） */
+  sources: number[];
 }

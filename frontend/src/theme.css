@@ -216,3 +216,29 @@ details.draftbox{border:1px solid var(--border);border-radius:6px;background:var
 details.draftbox summary{padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;color:var(--ink2)}
 details.draftbox .inner{padding:2px 14px 12px;font-size:12.5px;line-height:1.75;border-top:1px solid var(--border);white-space:pre-wrap}
 .footnote{font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.7}
+
+/* ---------- M5：AI 问答（原型 168–176 行） ---------- */
+.qa-q{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:10px 14px;font-size:13.5px;font-weight:600;margin:18px 0 10px}
+.qa-a{border-left:3px solid var(--accent-line);padding:2px 0 2px 16px;margin:0 0 6px}
+.qa-a p{margin:6px 0}
+.qa-a ul{margin:6px 0;padding-left:20px}
+.cite{border:1px solid var(--border);border-radius:6px;background:var(--surface);padding:9px 12px;margin:8px 0;font-size:12.3px}
+.cite .ct-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:3px}
+.cite .frag{color:var(--ink2);border-left:2px solid var(--border2);padding-left:10px;margin:5px 0;font-size:12px;line-height:1.65}
+.preset-qs{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0}
+.preset-qs button{border:1px solid var(--border2);background:var(--surface);color:var(--ink2);border-radius:14px;padding:3px 12px;font-size:12px}
+.preset-qs button:hover{border-color:var(--accent-line);color:var(--accent-ink);background:var(--accent-weak)}
+.preset-qs button:disabled{opacity:.5;cursor:default}
+
+/* ---------- M5：数据看板（原型 218–228 行；.footnote 已在 M4 段） ---------- */
+.dashgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.bigv{font-family:var(--mono);font-size:30px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.1}
+.bigv .u{font-size:14px;color:var(--ink3)}
+.trend{display:flex;align-items:flex-end;gap:7px;height:74px;margin-top:12px}
+.trend .bar{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;height:100%}
+.trend .bar i{display:block;width:100%;background:var(--accent);opacity:.28;border-radius:2px 2px 0 0}
+.trend .bar:last-child i{opacity:1}
+.trend .bar em{font-style:normal;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+.cov td,.cov th{text-align:center}
+.cov td:first-child{text-align:left}
+.cov .c0{color:var(--ink3)} .cov .c1{font-weight:600}

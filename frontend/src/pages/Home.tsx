@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { get, post } from "../api/client";
+import { ApiError, get, post } from "../api/client";
 import { StatusPill } from "../lib/display";
 import { fmtAgo } from "../lib/display";
 import { useToast } from "../lib/toast";
 import { userName } from "../lib/users";
-import type { GapOut, HomeResponse } from "../types";
+import type { GapDraftOut, GapOut, HomeResponse } from "../types";
 
 // 首页：统一搜索框 + 快捷入口 + 数字条 + 最近验证 + 热门 + 待认领缺口 + 状态规则速览。
 // DOM 结构与文案逐条对照 prototype 的 renderHome()。数据来自 GET /api/v1/home。
 //
-// 数字条第五格「本月有效复用率」在原型里是写死的 68%：它的口径是「非作者成功复用 ÷ 需求
-// 事件」（design.md §9），得由事件表实时聚合，M5 看板才落地。硬规则 5 明确禁止拿点击量之类
-// 的近似值冒充，所以这里显示「—」而不是编一个数。
+// 数字条第五格「本月有效复用率」：与看板同一口径（services/metrics.py 实时聚合），
+// den=0 时后端给 pct=null，这里显示「—」—— 硬规则 5 禁止拿近似值或 0% 冒充。
 
 const QUICK_LINKS = ["显存 OOM", "投机推理", "图模式"];
 
@@ -30,8 +29,9 @@ export default function Home() {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
-  // 认领 = 登记「我来写这份知识」，让别人不再重复补。它不产出资产，
-  // 所以只就地更新这一条缺口，不重拉整个首页。
+  // 认领 = 登记「我来写这份知识」（M3：只就地更新那一行，不产出资产）。
+  // M5 接上底稿：认领成功后请求 AI 预填（POST /gaps/{id}/draft），带着结果跳沉淀页；
+  // 网关降级（503）时照样跳 —— 认领本身不受影响，作者手写就是。
   async function claimGap(gap: GapOut) {
     if (claiming !== null) return;
     setClaiming(gap.id);
@@ -40,15 +40,25 @@ export default function Home() {
       setData((prev) =>
         prev ? { ...prev, gaps: prev.gaps.map((g) => (g.id === claimed.id ? claimed : g)) } : prev,
       );
-      setToast(
-        <>
-          已认领 {claimed.code}，AI 将基于相关 Issue / 会话生成草稿底稿。
-          <br />
-          写好后从「沉淀记录」发布，缺口会随之关闭。
-        </>,
-      );
     } catch (e) {
       setToast(<>认领失败：{e instanceof Error ? e.message : String(e)}</>);
+      setClaiming(null);
+      return;
+    }
+    try {
+      const out = await post<GapDraftOut>(`/gaps/${gap.id}/draft`, {});
+      navigate("/capture", {
+        state: { gapId: gap.id, gapCode: gap.code, question: gap.question, draftOut: out },
+      });
+    } catch (e) {
+      const message =
+        e instanceof ApiError && e.code === "AI_UNAVAILABLE"
+          ? "AI 底稿暂不可用，已为你打开空白沉淀页；认领仍然有效。"
+          : `底稿生成失败（${e instanceof Error ? e.message : String(e)}），已为你打开空白沉淀页。`;
+      setToast(<>{message}</>);
+      navigate("/capture", {
+        state: { gapId: gap.id, gapCode: gap.code, question: gap.question, draftOut: null },
+      });
     } finally {
       setClaiming(null);
     }
@@ -113,9 +123,18 @@ export default function Home() {
           <div className="v">{data?.stats.open_gaps ?? "–"}</div>
           <div className="l">待认领知识缺口</div>
         </div>
-        <div className="st" title="口径为「非作者成功复用 ÷ 需求事件」，M5 看板由事件表实时聚合">
-          <div className="v">—</div>
-          <div className="l">本月有效复用率（M5）</div>
+        <div
+          className="st"
+          title={
+            data
+              ? `非作者成功复用 ${data.stats.reuse_rate.num} ÷ 需求事件 ${data.stats.reuse_rate.den}（近 30 天，口径同数据看板）`
+              : "口径为「非作者成功复用 ÷ 需求事件」（design.md §9）"
+          }
+        >
+          <div className="v">
+            {data ? (data.stats.reuse_rate.pct === null ? "—" : `${Math.round(data.stats.reuse_rate.pct)}%`) : "–"}
+          </div>
+          <div className="l">本月有效复用率</div>
         </div>
       </div>
 
@@ -176,7 +195,7 @@ export default function Home() {
                         onClick={() => void claimGap(g)}
                         disabled={claiming !== null}
                       >
-                        {claiming === g.id ? "认领中…" : "认领并生成草稿"}
+                        {claiming === g.id ? "认领中，正在生成底稿…" : "认领并生成草稿"}
                       </button>
                     </>
                   )}
