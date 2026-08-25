@@ -12,8 +12,22 @@
 
 ## 快速开始
 
+### 部署到服务器（只需要 Docker）
+
 ```bash
-docker compose up -d db
-cd backend && pip install -e ".[dev]" && uvicorn app.main:app --reload
+cp .env.docker.example .env   # 填 LLM 网关 key 与对外端口
+docker compose up -d --build  # 自动建表 + 导入示例数据 + 起前后端
+```
+
+打开 `http://<服务器IP>:8080`。详细步骤与运维命令见 [docs/setup.md](docs/setup.md) 第五节。
+
+### 本机开发
+
+```bash
+docker compose up -d db       # Windows 免 Docker 方案：powershell -File scripts/devdb.ps1 start
+cd backend && pip install -e ".[dev]" && python -m alembic upgrade head && python scripts/seed.py
+cd backend && uvicorn app.main:app --reload   # .env 按进程 cwd 解析，必须在 backend/ 起
 cd frontend && npm install && npm run dev
 ```
+
+从零装机的完整指引见 [docs/setup.md](docs/setup.md)。

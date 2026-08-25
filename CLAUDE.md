@@ -41,6 +41,7 @@ prototype/  单文件交互原型（内存数据，勿当作生产代码）
 # 数据库（postgres16 + pgvector，端口 5433）
 docker compose up -d db
 # 无 Docker 时的替代方案见下方「不装 Docker 起 PostgreSQL」
+# 整套起（服务器部署）：docker compose up -d --build，见下方「Docker 部署（Linux 服务器）」
 
 # 后端（Python 3.11+）
 cd backend
@@ -101,6 +102,10 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 - [x] **M5-2** frontend：问答页（引用块/风险/冲突/not_found+一键记缺口/「暂不可用」五态）、
       看板页（4 卡 + 趋势条 + 覆盖矩阵、公式与分子分母展示、估算自报）、首页复用率真数、
       认领→AI 底稿→沉淀页预填→发布回链；「后端没有的按钮 disabled 占位」规则退役
+- [x] **部署** Docker 化（2026-08-25）：`docker compose up -d --build` 起 db + backend + frontend
+      三容器，entrypoint 自动 `alembic upgrade head` + 空库导种子；用户手册 docs/setup.md 第五节，
+      实现口径见下方「Docker 部署（Linux 服务器）」。**本机无 Docker，构建与运行未实测，
+      待在 Linux 服务器上按 setup.md 第五节第 4 步验收**
 - [x] **M5** 在真实 PG + 真实公有云网关（DeepSeek + SiliconFlow）上验收：MLA 双 VERIFIED
       引用、KA-010 REVIEW_DUE 引用带 M4 影响摘要与复核链接、PD 分离 not_found→记缺口→
       认领→底稿(22s)→发布 KA-019→立即可检索可引用、重复回链 409、降级 503 语义、
@@ -191,6 +196,46 @@ MVP（M1–M5）已交付。以下按价值/依赖排序，是 V1.1 的候选项
 7. **导航式查询识别**：§9 分母的「− 导航式查询」MVP 未实现，需要点击行为数据积累后再定。
 
 每项动手前：先在本文件登记范围，完成后对照 `prototype/kms-prototype.html` 做 UI 验收（如涉及）。
+
+## Docker 部署（Linux 服务器）
+
+`docker compose up -d --build` 起三个容器：db(pgvector) + backend(uvicorn) + frontend(nginx，
+托管构建产物并把 `/api`·`/docs`·`/healthz` 反代给 backend)。只有 frontend 对外暴露端口
+（`ZY_HTTP_PORT`，默认 8080），db 只绑 `127.0.0.1:5433`。使用手册在 `docs/setup.md` 第五节，
+这里只记实现口径。
+
+涉及文件：`.dockerignore`·`.gitattributes`·`.env.docker.example`（三个都在仓库根）、
+`docker-compose.yml`、`backend/Dockerfile`、`backend/docker-entrypoint.sh`、
+`frontend/Dockerfile`、`frontend/nginx.conf`。
+
+### 定下的五件事（改动别退回去）
+
+1. **构建上下文是仓库根，不是 backend/**：`scripts/seed.py` 用 `parents[2] / "prototype"`
+   找种子数据，镜像里必须保住 `/app/backend` 与 `/app/prototype` 的相对关系。两个 Dockerfile
+   都写 `context: .` + `COPY backend/...`／`COPY frontend/...`。
+2. **backend 的 WORKDIR 必须是 `/app/backend`**：`Settings(env_file=".env")` 按进程 cwd 解析
+   （与「uvicorn 必须在 backend/ 起」是同一个坑），`alembic.ini` 与 `scripts/` 也在这一层。
+   同理镜像装 `.[dev]` 而不是 base —— alembic 在 dev 可选依赖里，而 entrypoint 第一步就要用它。
+3. **镜像里绝不能有 `.env`**：Docker 不读 `.gitignore`，`.dockerignore` 的 `**/.env` 是唯一屏障
+   （`backend/.env` 里是真实网关 key）。配置一律由 compose 的 `environment:` + `${VAR:-默认}`
+   注入，不用 `env_file:`（文件不存在会直接让 `up` 失败，还会把开发机的 `localhost:5433`
+   连接串误带进容器）。compose 的**嵌套插值不可靠**，别写 `${A:-...${B}...}`。
+   容器内连库是 `db:5432`（服务名 + 真实端口），5433 是宿主机映射，别照抄。
+4. **nginx 的 `proxy_read_timeout` 必须大于后端 `generation_timeout`(60s)**，现值 180s。
+   nginx 默认就是 60s，会抢在后端之前掐断 `/api/v1/ask`，用户看到 504 而不是设计好的
+   503 `AI_UNAVAILABLE` —— M5「降级是明确语义」那一条就被反代毁掉了。
+5. **`seed.py --skip-if-seeded` 不是 `|| true`**：entrypoint 保持 `set -e`，
+   「库里已有资产」返回 0、真出错仍非零。在 entrypoint 里吞退出码，会把「种子导入炸了」
+   伪装成「已经导过了」，起来一个半残的库还对外服务。
+
+### 两个 Windows 侧的连带约定
+
+- `.gitattributes` 强制 `*.sh text eol=lf`：本仓库 `core.autocrlf=true`，Windows 检出会把
+  entrypoint 变成 CRLF，带 `\r` 的 shebang 在 Linux 上直接报 "no such file or directory"。
+  Dockerfile 里还补了一次 `sed -i 's/\r$//'` 做保险。`*.ps1` 标成 `-text`，别让 git 去动
+  `devdb.ps1` 的 BOM（见下一节的坑 1）。
+- jieba 预热（`jieba.initialize()`）放在 `USER app` **之后**：root 写出的 `/tmp/jieba.cache`
+  是 0600，运行时的 app 用户读不了，等于白热还每次重建。
 
 ## 不装 Docker 起 PostgreSQL（`scripts/devdb.ps1`）
 

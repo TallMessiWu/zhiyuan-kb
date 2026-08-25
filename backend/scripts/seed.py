@@ -3,6 +3,7 @@
 用法（先 alembic upgrade head）：
     python scripts/seed.py            # 空库导入
     python scripts/seed.py --reset    # 先清空业务表再导入
+    python scripts/seed.py --skip-if-seeded   # 已有数据就正常退出（容器 entrypoint 用）
 
 原型里的 ASSETS 是 JS 对象字面量（键不带引号），本脚本用一个「字符串感知」的转换器把它
 变成 JSON 再解析 —— 不能用正则粗暴加引号，正文里有 "ValueError: No available memory" 这种
@@ -490,6 +491,10 @@ def main() -> int:
                         help="直接按模型建表（本地快速起库用；正式路径是 alembic upgrade head）")
     parser.add_argument("--no-embeddings", action="store_true",
                         help="不回填向量（默认会试着调 embedding 网关；网关不可达时本来就自动跳过）")
+    parser.add_argument("--skip-if-seeded", action="store_true",
+                        help="库里已有资产时正常退出（0）而不是报错（1）—— 给容器 entrypoint 用："
+                             "每次启动都调一次，第一次导入、以后跳过。真出错仍是非零退出，"
+                             "不会被 entrypoint 的 set -e 漏掉")
     args = parser.parse_args()
 
     if args.create_all:
@@ -500,6 +505,9 @@ def main() -> int:
         if args.reset:
             _clear(db)
         elif db.scalar(select(KnowledgeAsset.id).limit(1)) is not None:
+            if args.skip_if_seeded:
+                print("库里已有资产，跳过种子导入。")
+                return 0
             print("库里已有资产，加 --reset 覆盖导入。", file=sys.stderr)
             return 1
 

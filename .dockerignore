@@ -1,0 +1,42 @@
+# Docker 构建上下文（context 是仓库根 —— backend/prototype 的相对关系要保住，见 CLAUDE.md）
+# 注意：Docker 不看 .gitignore，本文件是唯一屏障。
+
+# 密钥：backend/.env 里是真实网关 key，绝不能进镜像
+**/.env
+
+# git 与工具缓存
+.git/
+.gitignore
+.claude/
+**/__pycache__/
+**/*.py[cod]
+**/*.egg-info/
+.pytest_cache/
+**/.pytest_cache/
+.ruff_cache/
+**/.ruff_cache/
+.mypy_cache/
+
+# 本地开发用的 PostgreSQL（scripts/devdb.ps1 建的）
+.pgdata/
+.pgvenv/
+.pgdata.log
+.venv/
+venv/
+
+# node / vite 产物（镜像里重新构建）
+**/node_modules/
+frontend/dist/
+**/*.tsbuildinfo
+
+# 计划/编辑器
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 说明：以下目录**必须**留在上下文里，别加进来
+#   prototype/                 seed.py 从这里抽 18 条种子资产
+#   backend/alembic/           建表迁移
+#   backend/scripts/           seed.py / reindex.py
+#   frontend/package-lock.json npm ci 依赖

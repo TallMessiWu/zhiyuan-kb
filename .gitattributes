@@ -1,0 +1,9 @@
+# 容器里执行的文件必须是 LF —— 本仓库 core.autocrlf=true，Windows 检出会变成 CRLF，
+# 带 \r 的 shebang 在 Linux 上直接报 "no such file or directory"。
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.conf      text eol=lf
+
+# PowerShell 脚本保持原样：devdb.ps1 是 UTF-8 with BOM + CRLF，
+# 交给 git 做 eol 归一化没必要，也怕动到 BOM（见 CLAUDE.md 的 Windows 坑 1）。
+*.ps1       -text

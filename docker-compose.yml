@@ -1,13 +1,26 @@
+# 知源全栈编排。
+#   服务器部署：cp .env.docker.example .env && 填 key → docker compose up -d --build
+#   只想起个库给本地开发用（Windows/Mac 开发流程不变）：docker compose up -d db
+#
+# 配置注入用 environment + ${VAR:-默认值} 插值（compose 会自动读根目录 .env），
+# 不用 env_file —— env_file 指向不存在的文件会直接让 up 失败，而且会把开发机
+# backend/.env 里 localhost:5433 的连接串误带进容器。
 services:
   db:
     image: pgvector/pgvector:pg16
     container_name: zhiyuan-db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: zhiyuan
+      # 密码写死：它只在 compose 内网有意义（5433 只绑回环）。真要改，得同时改这里和
+      # .env 的 ZY_DATABASE_URL —— 而且 volume 一旦初始化过，改 POSTGRES_PASSWORD 也不会
+      # 重设已建好的库，必须 docker compose down -v 重来。compose 的嵌套插值不可靠，
+      # 所以这里不做 ${VAR} 套 ${VAR}。
       POSTGRES_PASSWORD: zhiyuan_dev
       POSTGRES_DB: zhiyuan
     ports:
-      - "5433:5432"
+      # 只绑回环：本地开发照常 psql 连 5433，服务器上不对公网暴露数据库
+      - "127.0.0.1:5433:5432"
     volumes:
       - zhiyuan_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,6 +28,59 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        # 国内服务器在 .env 里设 PIP_INDEX_URL 即可，无需记 --build-arg
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    container_name: zhiyuan-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # 网关跑在宿主机上时（内网 vLLM/SGLang 之类），.env 里把 URL 写成
+    # http://host.docker.internal:9000/v1 即可 —— Linux 上要靠这一行才解析得了。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # 容器内走 compose 网络：服务名 db + 真实端口 5432（5433 是宿主机映射，别照抄）
+      ZY_DATABASE_URL: ${ZY_DATABASE_URL:-postgresql+psycopg://zhiyuan:zhiyuan_dev@db:5432/zhiyuan}
+      # chat 网关（DeepSeek 等任意 OpenAI 兼容端点）；不配 = AI 摘要落回规则式、问答返回「暂不可用」
+      ZY_LLM_GATEWAY_URL: ${ZY_LLM_GATEWAY_URL:-http://localhost:9000/v1}
+      ZY_LLM_MODEL: ${ZY_LLM_MODEL:-internal-chat}
+      ZY_LLM_API_KEY: ${ZY_LLM_API_KEY:-}
+      # embedding 网关（留空 = 跟随 chat 网关）；维度钉死 1024，见 .env.docker.example
+      ZY_EMBEDDING_GATEWAY_URL: ${ZY_EMBEDDING_GATEWAY_URL:-}
+      ZY_EMBEDDING_API_KEY: ${ZY_EMBEDDING_API_KEY:-}
+      ZY_EMBEDDING_MODEL: ${ZY_EMBEDDING_MODEL:-bge-m3}
+      # Git webhook 验签密钥（接了 webhook 就必须改掉）
+      ZY_WEBHOOK_SECRET: ${ZY_WEBHOOK_SECRET:-change-me}
+      # 首启空库自动导 18 条示例；正式库置 0
+      ZY_AUTO_SEED: ${ZY_AUTO_SEED:-1}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # 首启要跑迁移 + 种子（含 18 次 embedding 网关往返），给足冷启动时间
+      start_period: 120s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org/}
+    container_name: zhiyuan-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${ZY_HTTP_PORT:-8080}:80"
 
 volumes:
   zhiyuan_pgdata:
