@@ -148,6 +148,26 @@ nav.menu a .bdg{margin-left:auto;background:var(--warn-bg);color:var(--warn);bor
 .feedbackbar{position:sticky;bottom:0;background:var(--surface);border:1px solid var(--border2);border-radius:8px;box-shadow:var(--shadow);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:26px}
 .feedbackbar .q{font-size:12.5px;color:var(--ink2);margin-right:4px}
 
+/* ---------- 共用 Markdown：正文 / 问答（沿用原型 token，不影响外围布局） ---------- */
+.markdown{min-width:0;overflow-wrap:anywhere}
+.markdown :is(h1,h2){font-size:15px;margin:22px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.markdown :is(h3,h4,h5,h6){font-size:14px;margin:18px 0 6px}
+.markdown pre{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.7}
+.markdown pre code{background:none;border:none;padding:0;white-space:pre}
+.markdown blockquote{margin:12px 0;padding:2px 14px;background:var(--surface2);color:var(--ink2)}
+.markdown table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse;margin:12px 0}
+.markdown :is(th,td){padding:6px 10px;border:1px solid var(--border);text-align:left}
+.markdown th{background:var(--surface2)}
+.markdown img{max-width:100%;height:auto}
+.markdown .katex-display{max-width:100%;overflow-x:auto;overflow-y:hidden;padding:4px 0}
+.markdown .katex-error{color:var(--bad);white-space:pre-wrap}
+.mermaid-block{margin:14px 0;min-width:0}
+.mermaid-diagram{overflow-x:auto;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:6px}
+.mermaid-diagram svg{display:block;margin-inline:auto}
+.mermaid-status{font-size:12px;color:var(--ink2)}
+.mermaid-error{font-size:12px;color:var(--bad)}
+.mermaid-measure{position:fixed;top:0;left:0;visibility:hidden;pointer-events:none}
+
 /* ---------- 沉淀 ---------- */
 .cap-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:22px}
 @media (max-width:1000px){.cap-grid{grid-template-columns:1fr}}

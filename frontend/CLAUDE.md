@@ -75,8 +75,15 @@ M5 补充：
 - **认领跳沉淀页带 `location.state`**（gapId/gapCode/question/draftOut）：底稿 503 时
   `draftOut=null` 照样跳（认领已生效，作者手写），沉淀页据此切换文案。沉淀页无 state
   时保持原型演示数据（真会话接入是 V1.1）。发布 payload 带 `gap_id`，成功即缺口闭环。
-- `lib/markdown.ts` 支持六种语法（M5 加了 `**强调**` 与一级 `- ` 列表 —— 问答回答里
-  LLM 高频使用）；仍然先整体转义再套标签，`dangerouslySetInnerHTML` 才是安全的。
+- `lib/markdown.tsx` 的 `<Markdown>` 是详情正文和问答共用入口（V1.1 替换原来的六语法
+  正则解析器）：React Markdown + GFM + remark-breaks 保留单换行，支持表格/嵌套列表。
+  `$...$` 为行内公式，单独成行的 `$$` 包围公式块，`math` 围栏同样按块级公式渲染；
+  KaTeX CSS/字体随构建产物发布，不依赖 CDN。普通代码块/行内代码中的公式语法不解释。
+- `mermaid` 围栏由 `lib/MermaidDiagram.tsx` 按需加载 `mermaid-renderer.ts` 渲染；多图串行
+  初始化/绘制，深浅主题变化重绘，卸载或切换正文时忽略迟到结果。语法或加载失败保留源码。
+  **安全边界不得放宽**：不启用原始 HTML 解析，不覆盖 Markdown 默认 URL 过滤，KaTeX
+  `trust=false`；Mermaid `strict` + 禁止正文覆盖配置 + 关闭 HTML 标签/点击绑定，输出再经
+  DOMPurify SVG 清洗。不要把 AI 输出视为可信 HTML。
 
 ## 命令
 
@@ -84,4 +91,9 @@ M5 补充：
 npm install
 npm run dev      # http://localhost:5173，/api 已代理到 :8000
 npm run build
+npm test         # Vitest + jsdom：Markdown/公式、图表并发/失败/安全、真实 Mermaid 引擎
 ```
+
+图表集成测试仅模拟 jsdom 缺失的 SVG 测量 API，不代表真实浏览器的排版验收。
+手动验收：详情页与问答页分别放入 Mermaid 流程图/时序图、行内公式、分式公式块、普通
+代码块和错误图表；检查深浅主题及窄屏滚动，确认错误块不影响后续正文与反馈操作。

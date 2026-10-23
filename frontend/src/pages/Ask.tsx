@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, post } from "../api/client";
 import { StatusPill, fmtAgo } from "../lib/display";
-import { renderMarkdown } from "../lib/markdown";
+import { Markdown } from "../lib/markdown";
 import { useToast } from "../lib/toast";
 import type { AskResponse, Citation, NotFoundOut } from "../types";
 
@@ -183,8 +183,7 @@ export default function Ask() {
 
             {entry.kind === "answer" && !entry.data.not_found && (
               <>
-                {/* answer_md 来自后端约束生成，renderMarkdown 先整体转义再套标签，注入安全 */}
-                <div dangerouslySetInnerHTML={{ __html: renderMarkdown(entry.data.answer_md) }} />
+                <Markdown>{entry.data.answer_md}</Markdown>
 
                 {entry.data.conflict && (
                   <div className="callout warn">

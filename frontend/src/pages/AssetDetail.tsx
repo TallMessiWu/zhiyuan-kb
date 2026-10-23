@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError, CURRENT_USER, get, post } from "../api/client";
 import { DirectionChip, StatusPill, TierChip, fmtDate } from "../lib/display";
-import { renderMarkdown } from "../lib/markdown";
+import { Markdown } from "../lib/markdown";
 import { useToast } from "../lib/toast";
 import { userName } from "../lib/users";
 import {
@@ -261,11 +261,7 @@ export default function AssetDetail() {
 
       <div className="detail-grid">
         <div className="doc">
-          <div
-            dangerouslySetInnerHTML={{
-              __html: renderMarkdown(asset.current_version?.body_md ?? ""),
-            }}
-          />
+          <Markdown>{asset.current_version?.body_md ?? ""}</Markdown>
 
           {!dead && (
             <>

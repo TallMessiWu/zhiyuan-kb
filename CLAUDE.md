@@ -177,6 +177,13 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 2. `Trigger` 枚举的 PG 类型名是 `transition_trigger`：`pg_catalog` 有内置伪类型 `trigger`
    且隐式排在 search_path 最前，同名会被遮蔽并报 `column "trigger" has pseudo-type trigger`。
 
+## V1.1 当前改动范围
+
+- **Markdown 富文本渲染（2026-10-23）**：详情正文与 AI 问答共用安全 Markdown 组件，
+  支持 Mermaid 围栏图表、行内/块级数学公式与 `math` 围栏；保留普通代码块与换行，
+  适配深浅主题和窄屏，图表失败时显示源码。仅前端渲染，不改存储、API 或可信状态。
+  已通过前端构建与 16 项自动化测试（含真实 Mermaid 引擎，SVG 测量模拟）；浏览器视觉验收待完成。
+
 ## 下一步（V1.1 清单 —— MVP 五个里程碑已全部完成）
 
 MVP（M1–M5）已交付。以下按价值/依赖排序，是 V1.1 的候选项：
