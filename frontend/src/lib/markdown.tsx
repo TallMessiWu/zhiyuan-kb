@@ -1,10 +1,11 @@
-import { memo } from "react";
+import { memo, useId } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkBreaks from "remark-breaks";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { MermaidDiagram } from "./MermaidDiagram";
+import { rehypeToc } from "./rehype-toc";
 import "katex/dist/katex.min.css";
 
 const components: Components = {
@@ -25,11 +26,15 @@ const components: Components = {
 
 /** 用户原始 HTML 不执行；保留默认安全 URL 过滤，KaTeX 不信任 HTML/链接命令。 */
 export const Markdown = memo(function Markdown({ children }: { children: string }) {
+  const prefix = `md-${useId().replace(/:/g, "")}`;
   return (
     <div className="markdown">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath, remarkBreaks]}
-        rehypePlugins={[[rehypeKatex, { trust: false, strict: "ignore", maxSize: 20, maxExpand: 1000 }]]}
+        rehypePlugins={[
+          [rehypeToc, { prefix, source: children }],
+          [rehypeKatex, { trust: false, strict: "ignore", maxSize: 20, maxExpand: 1000 }],
+        ]}
         components={components}
       >
         {children}

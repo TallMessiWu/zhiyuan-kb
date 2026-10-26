@@ -152,6 +152,12 @@ nav.menu a .bdg{margin-left:auto;background:var(--warn-bg);color:var(--warn);bor
 .markdown{min-width:0;overflow-wrap:anywhere}
 .markdown :is(h1,h2){font-size:15px;margin:22px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border)}
 .markdown :is(h3,h4,h5,h6){font-size:14px;margin:18px 0 6px}
+.markdown :is(h1,h2,h3,h4,h5,h6)[id]{scroll-margin-top:20px}
+.markdown .markdown-toc{margin:16px 0;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px}
+.markdown .markdown-toc > strong{display:block;margin-bottom:6px;color:var(--ink2);font-size:13px}
+.markdown .markdown-toc ul{margin:0;padding-left:18px;list-style:disc}
+.markdown .markdown-toc > ul{padding-left:0;list-style:none}
+.markdown .markdown-toc a{display:block;min-height:24px;padding:2px 0;text-underline-offset:3px}
 .markdown pre{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:10px 14px;overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.7}
 .markdown pre code{background:none;border:none;padding:0;white-space:pre}
 .markdown blockquote{margin:12px 0;padding:2px 14px;background:var(--surface2);color:var(--ink2)}
