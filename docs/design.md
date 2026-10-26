@@ -99,6 +99,12 @@ M2 落地细节（实现在 `backend/app/services/{text,indexing,recall,search}.
   版本号（`v0.10.0rc1`）和带连接符的标识符（`max_num_batched_tokens`）额外整体保留一份，
   它们是本领域最该精确命中的东西。
 - **字段权重**在 PG 上由 `asset_search_doc.tsv` 生成列的 `setweight(A/B/C/D)` 表达。
+- **关键词排序带 IDF**：PG 的 `ts_rank` 系列没有语料统计，单次 OR 打分会让高频通用词压过
+  稀有主题词；改用 `Σ_t idf_t × ts_rank_cd(tsv, plainto_tsquery('simple', t), 32)`，保留字段权重。
+  `idf_t = log(1 + N/(df_t + s))`，N/df 均按同一 `conds` 候选集统计，s 默认 0.5（Settings）；
+  OR 粗排池默认取 `max(limit*4, 200)` 后在 SQL 内加权、按分数降序/asset_id 升序取 limit。
+  portable 的逐词命中权重同步乘 IDF；PG 新增统计/打分异常回落旧 OR 排序。只改关键词路名次，
+  **rel 仍为 RRF 归一化 0–30**，不将 IDF 原始分混入业务重排。
 - **RRF 的 k 取 10**（不是论文里的 60）：两路各召回 50 条，k=60 会把 rel 压成一条平线
   （第 1 名 30.0、第 10 名 29.5），相关度实际失声、排序全由 trust 说了算；
   k=10 时 1 名 30 / 10 名 15 / 50 名 5，梯度才有意义。归一化按**非空**路数算，

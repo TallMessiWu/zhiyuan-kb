@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -41,6 +42,12 @@ class Settings(BaseSettings):
     # 说了算。我们两路各取 50 条，k=10 时 1 名 30 / 10 名 15 / 50 名 5，梯度才有意义。
     recall_limit: int = 50
     rrf_k: int = 10
+    # PG 的 ts_rank_cd 没有语料统计，高频通用词会挤掉稀有主题词；两条关键词路径共用
+    # idf = log(1 + N/(df + s))。s 为正的平滑常数，避免 df=0 时除零。
+    keyword_idf_smoothing: float = Field(default=0.5, gt=0, allow_inf_nan=False)
+    # OR 粗召回池先放宽，再按逐词 IDF 重排；不能提前截到返回条数而丢掉稀有词命中。
+    keyword_pool_multiplier: int = Field(default=4, ge=1)
+    keyword_pool_min: int = Field(default=200, ge=1)
     # 向量召回与 AI 摘要开关：auto = 探测可用性，用不了就自动降级；on = 强制（用不了就报错）；off = 关闭
     vector_search: str = "auto"
     ai_summary: str = "auto"

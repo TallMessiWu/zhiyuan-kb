@@ -122,6 +122,15 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
 3. **两路召回都必须能降级**，且降级要随响应返回（`recall` 字段）。判断可用性的顺序是
    「方言 → 列在不在 → 网关这次通不通」，任何一环失败都只影响那一路，不影响搜索可用性。
 
+#### 关键词排序必须带 IDF（V1.1 补充）
+
+PG 的单次 OR `ts_rank_cd` 没有语料统计，高频「模型/结构」会挤掉稀有「混元」。关键词路须按
+同一 `conds` 候选集统计 N/df，逐词以 `log(1 + N/(df + s))` 加权（s 默认 0.5，见 Settings）；
+portable 同口径，PG 新增统计/打分异常须回落旧排序。IDF 只改关键词名次，rel 仍由 RRF 生成。
+RRF 只认名次、不认原始相关强度，默认 `ask_min_rel=5` 对问答头部候选实际不起过滤作用
+（单路 50 条的末名 rel 也有 5.5），不能靠它补救关键词排序。验证 query：`混元模型结构`，
+核对相关文档 id **408/407** 的关键词名次与问答 top5；退回无 IDF 排序会让泛文档占位、问答误报 not_found。
+
 ### M3 期间定下的四件事（改动别退回去）
 
 1. **缺口合并不用 embedding**：判据是 jieba 词集合（Jaccard ≥ `ZY_GAP_MERGE_SIMILARITY`，
@@ -178,6 +187,8 @@ npm run dev                      # http://localhost:5173，/api 代理到 8000
    且隐式排在 search_path 最前，同名会被遮蔽并报 `column "trigger" has pseudo-type trigger`。
 
 ## V1.1 当前改动范围
+
+- **关键词召回 IDF 加权（2026-10-26）**：仅改 PG/portable 关键词排序、配置与口径文档；保留 PG 异常回落，不改 RRF/业务重排/问答/迁移，测试与真库验收由使用方执行（本轮未运行）。
 
 - **Markdown 富文本渲染（2026-10-23）**：详情正文与 AI 问答共用安全 Markdown 组件，
   支持 Mermaid 围栏图表、行内/块级数学公式与 `math` 围栏；保留普通代码块与换行，

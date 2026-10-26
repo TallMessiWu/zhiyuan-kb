@@ -178,29 +178,69 @@ def _keyword_pg(db: Session, terms: list[str], conds: list, *, limit: int) -> li
     # ts_rank_cd 的 32 = rank/(rank+1) 归一化，把分数压进 0–1，便于和向量路对齐观察
     rank = func.ts_rank_cd(tsv, tsq, 32).label("rank")
     stmt = _join_assets(select(AssetSearchDoc.asset_id, rank), conds).where(tsv.op("@@")(tsq))
-    stmt = stmt.order_by(rank.desc(), AssetSearchDoc.asset_id).limit(limit)
-    return [row.asset_id for row in db.execute(stmt)]
+    stmt = stmt.order_by(rank.desc(), AssetSearchDoc.asset_id)
+    try:
+        # PG 语句出错会使事务不可用；SAVEPOINT 回滚只撤销本次尝试，保住外层事务与旧排序。
+        with db.begin_nested():
+            parts = [func.plainto_tsquery("simple", term) for term in terms]
+            # N/df 基于完整的 conds 候选集，不受 OR 命中与下面的池大小截断影响。
+            stats_stmt = _join_assets(select(
+                func.count(AssetSearchDoc.asset_id),
+                *(func.count().filter(tsv.op("@@")(part)) for part in parts),
+            ), conds)
+            stats = db.execute(stats_stmt).one()
+            idfs = [
+                math.log1p(stats[0] / (df + settings.keyword_idf_smoothing))
+                for df in stats[1:]
+            ]
+            pool_limit = max(limit * settings.keyword_pool_multiplier, settings.keyword_pool_min)
+            pool = stmt.add_columns(tsv.label("tsv")).limit(pool_limit).subquery("keyword_pool")
+            # tsv 只留在 SQL 子查询里，逐词保留 A/B/C/D 字段权重；不把 tok_body 拉回 Python。
+            idf_rank = sum(
+                idf * func.ts_rank_cd(pool.c.tsv, part, 32)
+                for part, idf in zip(parts, idfs)
+            ).label("idf_rank")
+            weighted_stmt = (
+                select(pool.c.asset_id, idf_rank)
+                .order_by(idf_rank.desc(), pool.c.asset_id)
+                .limit(limit)
+            )
+            return [row.asset_id for row in db.execute(weighted_stmt)]
+    except Exception:
+        log.warning("关键词 IDF 统计/打分失败，回落到单次 OR ts_rank_cd 排序", exc_info=True)
+    return [row.asset_id for row in db.execute(stmt.limit(limit))]
 
 
 def _keyword_portable(db: Session, terms: list[str], conds: list, *, limit: int) -> list[int]:
-    """可移植加权词频：命中权重最高的字段桶算一次分，四个桶都没命中就退回原文子串匹配。
+    """可移植 IDF 加权：每词命中权重最高的字段桶算一次分，没命中就退回原文子串匹配。
 
     子串兜底是为了对齐原型 scoreAsset() 的 includes 行为 —— 中文分词粒度和用户输入
     经常对不齐（「图模式」vs「图 模式」），子串命中至少能把资产捞进候选。
+    N 为 conds 下全部索引文档数；df 按同一命中规则（含子串兜底）每文档每词最多计一次。
     """
     columns = [col for col, _ in FIELD_WEIGHTS]
     stmt = _join_assets(select(AssetSearchDoc.asset_id, *columns, AssetSearchDoc.raw_text), conds)
-    scored: list[tuple[float, int]] = []
+    total = 0
+    dfs = [0] * len(terms)
+    matched: list[tuple[int, list[float]]] = []
     for row in db.execute(stmt):
+        total += 1
         buckets = [(set(getattr(row, col.key).split()), weight) for col, weight in FIELD_WEIGHTS]
-        score = 0.0
-        for term in terms:
+        hits: list[float] = []
+        for i, term in enumerate(terms):
             hit = next((weight for tokens, weight in buckets if term in tokens), 0.0)
             if not hit and term in row.raw_text:
                 hit = FIELD_WEIGHTS[-1][1]
-            score += hit
-        if score:
-            scored.append((score, row.asset_id))
+            if hit:
+                dfs[i] += 1
+            hits.append(hit)
+        if any(hits):
+            matched.append((row.asset_id, hits))
+    idfs = [math.log1p(total / (df + settings.keyword_idf_smoothing)) for df in dfs]
+    scored = [
+        (sum(hit * idf for hit, idf in zip(hits, idfs)), asset_id)
+        for asset_id, hits in matched
+    ]
     scored.sort(key=lambda item: (-item[0], item[1]))
     return [asset_id for _, asset_id in scored[:limit]]
 
